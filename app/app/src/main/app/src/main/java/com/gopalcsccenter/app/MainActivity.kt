@@ -5,10 +5,10 @@ import android.graphics.Color
 import android.view.Gravity
 import android.view.View
 import android.widget.*
-import androidx.activity.ComponentActivity
+import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AlertDialog
 
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
 
     private val services = listOf(
         "आधार कार्ड सेवा",
