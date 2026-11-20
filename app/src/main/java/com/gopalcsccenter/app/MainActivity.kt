@@ -948,6 +948,23 @@ class MainActivity : AppCompatActivity() {
     }
 
 
+    private fun openSmsComposer(phone: String, message: String) {
+        val mobile = phone.filter { it.isDigit() }
+        if (mobile.length != 10) {
+            showMessage("ग्राहकाचा योग्य 10 अंकी मोबाईल नंबर उपलब्ध नाही.")
+            return
+        }
+        val intent = Intent(Intent.ACTION_SENDTO).apply {
+            data = android.net.Uri.parse("smsto:$mobile")
+            putExtra("sms_body", message)
+        }
+        try {
+            startActivity(intent)
+        } catch (_: Exception) {
+            showMessage("या फोनमध्ये SMS अॅप उपलब्ध नाही.")
+        }
+    }
+
     private fun showNotificationCenter() {
         val page = createLayout()
         addTitle(page, "सूचना केंद्र")
@@ -978,13 +995,17 @@ class MainActivity : AppCompatActivity() {
                 setPadding(4, 18, 4, 8)
             })
         }
-        fun addNotice(item: JSONObject, detail: String) {
+        fun addNotice(item: JSONObject, detail: String, smsMessage: String) {
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(10, 8, 10, 8)
+                setBackgroundColor(Color.rgb(240, 245, 250))
+            }
             val row = TextView(this).apply {
                 text = detail
                 textSize = 15f
                 setTextColor(Color.BLACK)
-                setPadding(14, 14, 14, 14)
-                setBackgroundColor(Color.rgb(240, 245, 250))
+                setPadding(4, 6, 4, 8)
                 isClickable = true
                 isFocusable = true
                 setOnClickListener {
@@ -1003,7 +1024,16 @@ class MainActivity : AppCompatActivity() {
                         .setPositiveButton("ठीक आहे", null).show()
                 }
             }
-            list.addView(row, LinearLayout.LayoutParams(
+            card.addView(row)
+            val smsButton = Button(this).apply {
+                text = "SMS पाठवा"
+                isAllCaps = false
+                setOnClickListener {
+                    openSmsComposer(item.optString("phone"), smsMessage)
+                }
+            }
+            card.addView(smsButton)
+            list.addView(card, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { setMargins(0, 4, 0, 6) })
         }
@@ -1022,7 +1052,11 @@ class MainActivity : AppCompatActivity() {
                     "बाकी पेमेंट: " + item.optString("customerName") +
                     "\nमोबाईल: " + item.optString("phone") +
                     "\nबाकी रक्कम: ₹" + String.format(Locale.US, "%.2f", item.optDouble("amount", 0.0)) +
-                    "\nबिल: " + item.optString("billNumber"))
+                    "\nबिल: " + item.optString("billNumber"),
+                    "नमस्कार " + item.optString("customerName") + ", Gopal CSC Center येथे आपल्या बिल क्रमांक " +
+                    item.optString("billNumber") + " ची ₹" +
+                    String.format(Locale.US, "%.2f", item.optDouble("amount", 0.0)) +
+                    " रक्कम बाकी आहे. कृपया पेमेंट करावे. धन्यवाद! - Gopal CSC Center")
             }
         }
         addSection("प्रलंबित अर्ज: " + pendingApps.size)
@@ -1039,7 +1073,11 @@ class MainActivity : AppCompatActivity() {
                     "प्रलंबित अर्ज: " + item.optString("customerName") +
                     "\nअर्ज क्र.: " + item.optString("applicationNo") +
                     "\nसेवा: " + item.optString("service") +
-                    "\nस्थिती: " + item.optString("applicationStatus", "अर्ज प्राप्त"))
+                    "\nस्थिती: " + item.optString("applicationStatus", "अर्ज प्राप्त"),
+                    "नमस्कार " + item.optString("customerName") + ", Gopal CSC Center मधील आपल्या " +
+                    item.optString("service") + " अर्जाची स्थिती: " +
+                    item.optString("applicationStatus", "अर्ज प्राप्त") +
+                    ". अर्ज क्र.: " + item.optString("applicationNo") + ". अधिक माहितीसाठी संपर्क करा. धन्यवाद!")
             }
         }
         addButton(page, "अर्ज ट्रॅकिंग उघडा") { showApplicationTracking() }
