@@ -230,7 +230,10 @@ class MainActivity : AppCompatActivity() {
         val fields = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val customerName = addField(fields, "ग्राहकाचे पूर्ण नाव")
         val phone = addField(fields, "मोबाईल नंबर", InputType.TYPE_CLASS_PHONE)
-        val fee = addField(fields, "सेवा शुल्क (₹)", InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL)
+        val fee = addField(fields, "सेवा शुल्क (₹) — Admin ने निश्चित केलेले", InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL)
+        fee.setText(String.format(Locale.US, "%.2f", getServiceFee(service)))
+        fee.isEnabled = false
+        fee.isFocusable = false
         val reference = addField(fields, "अर्ज / संदर्भ क्रमांक (ऐच्छिक)")
 
         val requiredDocuments = getRequiredDocumentsForService(service)
@@ -1909,80 +1912,107 @@ class MainActivity : AppCompatActivity() {
         }
         try { startActivity(intent) } catch (e: Exception) { showMessage("PDF viewer उपलब्ध नाही. WhatsApp शेअर वापरा.") }
     }
+    private val authorizedAdminId = "636657750019"
+    private val authorizedAdminEmail = "636657750019@gopalcsccenter.app"
+
+    private fun getServiceFee(service: String): Double {
+        return getSharedPreferences("gopal_csc_fees", MODE_PRIVATE)
+            .getFloat("fee_" + service.hashCode(), 0f).toDouble()
+    }
+
     private fun showAdminInfo() {
-        val adminPhone = "+917875277904"
-        if (firebaseAuth.currentUser?.phoneNumber == adminPhone) {
-            showAdminLoginStatus()
+        if (firebaseAuth.currentUser?.email == authorizedAdminEmail) {
+            showAdminFeePanel()
             return
         }
-        val callbacks = object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
-            override fun onVerificationCompleted(credential: PhoneAuthCredential) {
-                completeAdminSignIn(credential, adminPhone)
+        val page = createLayout()
+        addTitle(page, "Admin Login")
+        val idInput = addField(page, "Admin ID", InputType.TYPE_CLASS_NUMBER)
+        idInput.setText(authorizedAdminId)
+        val passwordInput = addField(page, "Password", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
+        passwordInput.transformationMethod = android.text.method.PasswordTransformationMethod.getInstance()
+        addButton(page, "Login") {
+            val enteredId = idInput.text.toString().trim()
+            val password = passwordInput.text.toString()
+            if (enteredId != authorizedAdminId) {
+                idInput.error = "चुकीचा Admin ID"
+                return@addButton
             }
-            override fun onVerificationFailed(e: FirebaseException) {
-                showMessage("OTP पाठवता आला नाही: ${e.localizedMessage ?: "पुन्हा प्रयत्न करा"}")
+            if (password.isBlank()) {
+                passwordInput.error = "Password टाका"
+                return@addButton
             }
-            override fun onCodeSent(verificationId: String, token: PhoneAuthProvider.ForceResendingToken) {
-                adminVerificationId = verificationId
-                showAdminOtpDialog(adminPhone)
-            }
-        }
-        val options = PhoneAuthOptions.newBuilder(firebaseAuth)
-            .setPhoneNumber(adminPhone)
-            .setTimeout(60L, TimeUnit.SECONDS)
-            .setActivity(this)
-            .setCallbacks(callbacks)
-            .build()
-        PhoneAuthProvider.verifyPhoneNumber(options)
-        showMessage("Admin नंबरवर OTP पाठवण्याची विनंती केली आहे.")
-    }
-
-    private fun showAdminOtpDialog(adminPhone: String) {
-        val otpInput = EditText(this).apply {
-            hint = "6 अंकी OTP टाका"
-            inputType = InputType.TYPE_CLASS_NUMBER
-            setSingleLine(true)
-        }
-        AlertDialog.Builder(this)
-            .setTitle("Admin OTP पडताळणी")
-            .setMessage("नोंदणीकृत Admin नंबर $adminPhone वर आलेला OTP टाका.")
-            .setView(otpInput)
-            .setPositiveButton("पडताळा") { _, _ ->
-                val code = otpInput.text.toString().trim()
-                val id = adminVerificationId
-                if (code.length != 6 || id.isNullOrBlank()) {
-                    showMessage("योग्य 6 अंकी OTP टाका.")
-                    return@setPositiveButton
+            firebaseAuth.signInWithEmailAndPassword(authorizedAdminEmail, password)
+                .addOnCompleteListener(this) { task ->
+                    if (!task.isSuccessful || firebaseAuth.currentUser?.email != authorizedAdminEmail) {
+                        firebaseAuth.signOut()
+                        showMessage("Login अयशस्वी. ID / Password तपासा.")
+                    } else {
+                        showMessage("Admin Login यशस्वी.")
+                        showAdminFeePanel()
+                    }
                 }
-                completeAdminSignIn(PhoneAuthProvider.getCredential(id, code), adminPhone)
-            }
-            .setNegativeButton("रद्द", null)
-            .show()
-    }
-
-    private fun completeAdminSignIn(credential: PhoneAuthCredential, adminPhone: String) {
-        firebaseAuth.signInWithCredential(credential).addOnCompleteListener(this) { task ->
-            if (!task.isSuccessful) {
-                showMessage("OTP पडताळणी अयशस्वी. पुन्हा प्रयत्न करा.")
-                return@addOnCompleteListener
-            }
-            if (firebaseAuth.currentUser?.phoneNumber != adminPhone) {
-                firebaseAuth.signOut()
-                showMessage("हा नंबर अधिकृत Admin नंबर नाही.")
-                return@addOnCompleteListener
-            }
-            showMessage("Admin OTP पडताळणी यशस्वी.")
-            showAdminLoginStatus()
         }
+        addButton(page, "मुख्य पानावर जा") { showHome() }
+        setContentView(page)
     }
 
-    private fun showAdminLoginStatus() {
-        AlertDialog.Builder(this)
-            .setTitle("Admin OTP पडताळणी यशस्वी")
-            .setMessage("अधिकृत Admin नंबरची Firebase OTP पडताळणी झाली आहे.\\n\\nसेवा शुल्क बदलण्याची सुविधा पुढील टप्प्यात जोडली जाईल.")
-            .setPositiveButton("ठीक आहे", null)
-            .setNegativeButton("Logout") { _, _ -> firebaseAuth.signOut() }
-            .show()
+    private fun showAdminFeePanel() {
+        if (firebaseAuth.currentUser?.email != authorizedAdminEmail) {
+            firebaseAuth.signOut()
+            showMessage("Admin प्रवेश नाकारला.")
+            showHome()
+            return
+        }
+        val page = createLayout()
+        addTitle(page, "Admin नियंत्रण — सेवा शुल्क")
+        val note = TextView(this).apply {
+            text = "प्रत्येक सेवेचे शुल्क बदला आणि Save करा. ग्राहकांना हे शुल्क फक्त पाहता येईल. नवीन बिलात नवीन शुल्क लागू होईल; जुन्या बिलांची रक्कम बदलणार नाही."
+            textSize = 14f
+            setTextColor(Color.DKGRAY)
+            setPadding(4, 4, 4, 12)
+        }
+        page.addView(note)
+        val scroll = ScrollView(this)
+        val feeList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        scroll.addView(feeList)
+        services.forEach { service ->
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(10, 8, 10, 8)
+                setBackgroundColor(Color.rgb(240, 245, 250))
+            }
+            card.addView(TextView(this).apply {
+                text = service
+                textSize = 16f
+                setTextColor(Color.BLACK)
+            })
+            val amount = addField(card, "शुल्क (₹)", InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL)
+            amount.setText(String.format(Locale.US, "%.2f", getServiceFee(service)))
+            addButton(card, "हे शुल्क Save करा") {
+                val value = amount.text.toString().trim().toDoubleOrNull()
+                if (value == null || value < 0 || value > 1000000) {
+                    amount.error = "योग्य शुल्क टाका"
+                    return@addButton
+                }
+                getSharedPreferences("gopal_csc_fees", MODE_PRIVATE).edit()
+                    .putFloat("fee_" + service.hashCode(), value.toFloat()).apply()
+                showMessage("$service चे शुल्क सेव्ह झाले.")
+            }
+            feeList.addView(card, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(0, 5, 0, 8) })
+        }
+        page.addView(scroll, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+        ))
+        addButton(page, "Logout") {
+            firebaseAuth.signOut()
+            showMessage("Admin Logout झाले.")
+            showHome()
+        }
+        addButton(page, "मुख्य पानावर जा") { showHome() }
+        setContentView(page)
     }
 
     private fun showMessage(message: String) {
