@@ -119,6 +119,7 @@ class MainActivity : AppCompatActivity() {
         addButton(layout, "उपलब्ध सेवा") { showServices() }
         addButton(layout, "ग्राहक / बिल इतिहास") { showBillHistory() }
         addButton(layout, "ग्राहक पेमेंट रिमाइंडर") { showPaymentReminders() }
+        addButton(layout, "बाकी पेमेंट वयोमान अहवाल") { showPendingPaymentAgingReport() }
         addButton(layout, "ग्राहक यादी / संपूर्ण इतिहास") { showCustomerDirectory() }
         addButton(layout, "ग्राहक खाते उतारा (Customer Ledger)") { showCustomerLedger() }
         addButton(layout, "अर्ज ट्रॅकिंग") { showApplicationTracking() }
@@ -1584,6 +1585,100 @@ class MainActivity : AppCompatActivity() {
         addButton(page, "अर्ज ट्रॅकिंग उघडा") { showApplicationTracking() }
         addButton(page, "मुख्य पानावर जा") { showHome() }
         setContentView(page)
+    }
+
+    private fun showPendingPaymentAgingReport() {
+        val records = loadBillRecords()
+        val today = java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.HOUR_OF_DAY, 0)
+            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+
+        val buckets = linkedMapOf(
+            "0 ते 7 दिवस" to mutableListOf<JSONObject>(),
+            "8 ते 30 दिवस" to mutableListOf<JSONObject>(),
+            "30 दिवसांपेक्षा जुनी" to mutableListOf<JSONObject>(),
+            "दिनांक उपलब्ध नाही" to mutableListOf<JSONObject>()
+        )
+        var totalPending = 0.0
+
+        for (i in 0 until records.length()) {
+            val item = records.optJSONObject(i) ?: continue
+            if (item.optString("paymentStatus") != "बाकी") continue
+
+            val amount = item.optDouble("amount", 0.0)
+            totalPending += amount
+            val createdAt = item.optLong("createdAt", 0L)
+            if (createdAt <= 0L) {
+                buckets["दिनांक उपलब्ध नाही"]?.add(item)
+                continue
+            }
+
+            val billDate = java.util.Calendar.getInstance().apply {
+                timeInMillis = createdAt
+                set(java.util.Calendar.HOUR_OF_DAY, 0)
+                set(java.util.Calendar.MINUTE, 0)
+                set(java.util.Calendar.SECOND, 0)
+                set(java.util.Calendar.MILLISECOND, 0)
+            }
+            val ageDays = ((today.timeInMillis - billDate.timeInMillis) / 86400000L).toInt().coerceAtLeast(0)
+            val key = when {
+                ageDays <= 7 -> "0 ते 7 दिवस"
+                ageDays <= 30 -> "8 ते 30 दिवस"
+                else -> "30 दिवसांपेक्षा जुनी"
+            }
+            buckets[key]?.add(item)
+        }
+
+        val report = StringBuilder()
+        report.append("एकूण बाकी बिले: ").append(buckets.values.sumOf { it.size }).append("\n")
+        report.append("एकूण बाकी रक्कम: ₹").append(String.format(Locale.US, "%.2f", totalPending))
+        buckets.forEach { (label, bills) ->
+            val amount = bills.sumOf { it.optDouble("amount", 0.0) }
+            report.append("\n\n").append(label)
+                .append(" — ").append(bills.size).append(" बिले")
+                .append("\nबाकी रक्कम: ₹").append(String.format(Locale.US, "%.2f", amount))
+            bills.sortedBy { it.optLong("createdAt", 0L) }.forEach { bill ->
+                val ageText = if (bill.optLong("createdAt", 0L) > 0L) {
+                    val billDate = java.util.Calendar.getInstance().apply {
+                        timeInMillis = bill.optLong("createdAt")
+                        set(java.util.Calendar.HOUR_OF_DAY, 0)
+                        set(java.util.Calendar.MINUTE, 0)
+                        set(java.util.Calendar.SECOND, 0)
+                        set(java.util.Calendar.MILLISECOND, 0)
+                    }
+                    val days = ((today.timeInMillis - billDate.timeInMillis) / 86400000L).toInt().coerceAtLeast(0)
+                    "$days दिवस"
+                } else {
+                    "दिनांक उपलब्ध नाही"
+                }
+                report.append("\n\n• ").append(bill.optString("customerName", "ग्राहक"))
+                    .append(" (").append(bill.optString("phone")).append(")")
+                    .append("\nबिल: ").append(bill.optString("billNumber"))
+                    .append(" | दिनांक: ").append(bill.optString("date"))
+                    .append("\nसेवा: ").append(bill.optString("service"))
+                    .append(" | वय: ").append(ageText)
+                    .append("\nरक्कम: ₹").append(String.format(Locale.US, "%.2f", bill.optDouble("amount", 0.0)))
+            }
+        }
+        if (buckets.values.all { it.isEmpty() }) {
+            report.append("\n\nसध्या कोणतेही बाकी पेमेंट नाही.")
+        }
+
+        val content = TextView(this).apply {
+            text = report.toString()
+            textSize = 15f
+            setTextColor(Color.BLACK)
+            setPadding(24, 16, 24, 16)
+        }
+        val scroll = ScrollView(this).apply { addView(content) }
+        AlertDialog.Builder(this)
+            .setTitle("बाकी पेमेंट वयोमान अहवाल")
+            .setView(scroll)
+            .setPositiveButton("ठीक आहे", null)
+            .show()
     }
 
     private fun showDailyIncomeReport() {
