@@ -21,6 +21,12 @@ import java.util.Date
 import java.util.Locale
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.concurrent.TimeUnit
+import com.google.firebase.auth.PhoneAuthCredential
+import com.google.firebase.auth.PhoneAuthProvider
+import com.google.firebase.auth.PhoneAuthOptions
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.FirebaseException
 
 class MainActivity : AppCompatActivity() {
 
@@ -44,6 +50,8 @@ class MainActivity : AppCompatActivity() {
     private val selectedApplicationDocuments = mutableListOf<android.net.Uri>()
     private var applicationDocumentsContainer: LinearLayout? = null
     private val chooseApplicationDocumentsRequest = 704
+    private val firebaseAuth: FirebaseAuth by lazy { FirebaseAuth.getInstance() }
+    private var adminVerificationId: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -119,7 +127,6 @@ class MainActivity : AppCompatActivity() {
         addButton(layout, "उपलब्ध सेवा") { showServices() }
         addButton(layout, "ग्राहक / बिल इतिहास") { showBillHistory() }
         addButton(layout, "ग्राहक पेमेंट रिमाइंडर") { showPaymentReminders() }
-        addButton(layout, "बाकी पेमेंट वयोमान अहवाल") { showPendingPaymentAgingReport() }
         addButton(layout, "ग्राहक यादी / संपूर्ण इतिहास") { showCustomerDirectory() }
         addButton(layout, "ग्राहक खाते उतारा (Customer Ledger)") { showCustomerLedger() }
         addButton(layout, "अर्ज ट्रॅकिंग") { showApplicationTracking() }
@@ -1587,99 +1594,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(page)
     }
 
-    private fun showPendingPaymentAgingReport() {
-        val records = loadBillRecords()
-        val today = java.util.Calendar.getInstance().apply {
-            set(java.util.Calendar.HOUR_OF_DAY, 0)
-            set(java.util.Calendar.MINUTE, 0)
-            set(java.util.Calendar.SECOND, 0)
-            set(java.util.Calendar.MILLISECOND, 0)
-        }
 
-        val buckets = linkedMapOf(
-            "0 ते 7 दिवस" to mutableListOf<JSONObject>(),
-            "8 ते 30 दिवस" to mutableListOf<JSONObject>(),
-            "30 दिवसांपेक्षा जुनी" to mutableListOf<JSONObject>(),
-            "दिनांक उपलब्ध नाही" to mutableListOf<JSONObject>()
-        )
-        var totalPending = 0.0
-
-        for (i in 0 until records.length()) {
-            val item = records.optJSONObject(i) ?: continue
-            if (item.optString("paymentStatus") != "बाकी") continue
-
-            val amount = item.optDouble("amount", 0.0)
-            totalPending += amount
-            val createdAt = item.optLong("createdAt", 0L)
-            if (createdAt <= 0L) {
-                buckets["दिनांक उपलब्ध नाही"]?.add(item)
-                continue
-            }
-
-            val billDate = java.util.Calendar.getInstance().apply {
-                timeInMillis = createdAt
-                set(java.util.Calendar.HOUR_OF_DAY, 0)
-                set(java.util.Calendar.MINUTE, 0)
-                set(java.util.Calendar.SECOND, 0)
-                set(java.util.Calendar.MILLISECOND, 0)
-            }
-            val ageDays = ((today.timeInMillis - billDate.timeInMillis) / 86400000L).toInt().coerceAtLeast(0)
-            val key = when {
-                ageDays <= 7 -> "0 ते 7 दिवस"
-                ageDays <= 30 -> "8 ते 30 दिवस"
-                else -> "30 दिवसांपेक्षा जुनी"
-            }
-            buckets[key]?.add(item)
-        }
-
-        val report = StringBuilder()
-        report.append("एकूण बाकी बिले: ").append(buckets.values.sumOf { it.size }).append("\n")
-        report.append("एकूण बाकी रक्कम: ₹").append(String.format(Locale.US, "%.2f", totalPending))
-        buckets.forEach { (label, bills) ->
-            val amount = bills.sumOf { it.optDouble("amount", 0.0) }
-            report.append("\n\n").append(label)
-                .append(" — ").append(bills.size).append(" बिले")
-                .append("\nबाकी रक्कम: ₹").append(String.format(Locale.US, "%.2f", amount))
-            bills.sortedBy { it.optLong("createdAt", 0L) }.forEach { bill ->
-                val ageText = if (bill.optLong("createdAt", 0L) > 0L) {
-                    val billDate = java.util.Calendar.getInstance().apply {
-                        timeInMillis = bill.optLong("createdAt")
-                        set(java.util.Calendar.HOUR_OF_DAY, 0)
-                        set(java.util.Calendar.MINUTE, 0)
-                        set(java.util.Calendar.SECOND, 0)
-                        set(java.util.Calendar.MILLISECOND, 0)
-                    }
-                    val days = ((today.timeInMillis - billDate.timeInMillis) / 86400000L).toInt().coerceAtLeast(0)
-                    "$days दिवस"
-                } else {
-                    "दिनांक उपलब्ध नाही"
-                }
-                report.append("\n\n• ").append(bill.optString("customerName", "ग्राहक"))
-                    .append(" (").append(bill.optString("phone")).append(")")
-                    .append("\nबिल: ").append(bill.optString("billNumber"))
-                    .append(" | दिनांक: ").append(bill.optString("date"))
-                    .append("\nसेवा: ").append(bill.optString("service"))
-                    .append(" | वय: ").append(ageText)
-                    .append("\nरक्कम: ₹").append(String.format(Locale.US, "%.2f", bill.optDouble("amount", 0.0)))
-            }
-        }
-        if (buckets.values.all { it.isEmpty() }) {
-            report.append("\n\nसध्या कोणतेही बाकी पेमेंट नाही.")
-        }
-
-        val content = TextView(this).apply {
-            text = report.toString()
-            textSize = 15f
-            setTextColor(Color.BLACK)
-            setPadding(24, 16, 24, 16)
-        }
-        val scroll = ScrollView(this).apply { addView(content) }
-        AlertDialog.Builder(this)
-            .setTitle("बाकी पेमेंट वयोमान अहवाल")
-            .setView(scroll)
-            .setPositiveButton("ठीक आहे", null)
-            .show()
-    }
 
     private fun showDailyIncomeReport() {
         val records = loadBillRecords()
@@ -1987,14 +1902,78 @@ class MainActivity : AppCompatActivity() {
         try { startActivity(intent) } catch (e: Exception) { showMessage("PDF viewer उपलब्ध नाही. WhatsApp शेअर वापरा.") }
     }
     private fun showAdminInfo() {
+        val adminPhone = "+917875277904"
+        if (firebaseAuth.currentUser?.phoneNumber == adminPhone) {
+            showAdminLoginStatus()
+            return
+        }
+        val callbacks = object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
+            override fun onVerificationCompleted(credential: PhoneAuthCredential) {
+                completeAdminSignIn(credential, adminPhone)
+            }
+            override fun onVerificationFailed(e: FirebaseException) {
+                showMessage("OTP पाठवता आला नाही: ${e.localizedMessage ?: "पुन्हा प्रयत्न करा"}")
+            }
+            override fun onCodeSent(verificationId: String, token: PhoneAuthProvider.ForceResendingToken) {
+                adminVerificationId = verificationId
+                showAdminOtpDialog(adminPhone)
+            }
+        }
+        val options = PhoneAuthOptions.newBuilder(firebaseAuth)
+            .setPhoneNumber(adminPhone)
+            .setTimeout(60L, TimeUnit.SECONDS)
+            .setActivity(this)
+            .setCallbacks(callbacks)
+            .build()
+        PhoneAuthProvider.verifyPhoneNumber(options)
+        showMessage("Admin नंबरवर OTP पाठवण्याची विनंती केली आहे.")
+    }
+
+    private fun showAdminOtpDialog(adminPhone: String) {
+        val otpInput = EditText(this).apply {
+            hint = "6 अंकी OTP टाका"
+            inputType = InputType.TYPE_CLASS_NUMBER
+            setSingleLine(true)
+        }
         AlertDialog.Builder(this)
-            .setTitle("Admin Login")
-            .setMessage(
-                "अधिकृत Admin नंबर: 7875277904\n\n" +
-                "सुरक्षित OTP Login साठी Firebase जोडणे आवश्यक आहे.\n" +
-                "OTP पडताळणी पूर्ण होईपर्यंत Admin प्रवेश बंद आहे."
-            )
+            .setTitle("Admin OTP पडताळणी")
+            .setMessage("नोंदणीकृत Admin नंबर $adminPhone वर आलेला OTP टाका.")
+            .setView(otpInput)
+            .setPositiveButton("पडताळा") { _, _ ->
+                val code = otpInput.text.toString().trim()
+                val id = adminVerificationId
+                if (code.length != 6 || id.isNullOrBlank()) {
+                    showMessage("योग्य 6 अंकी OTP टाका.")
+                    return@setPositiveButton
+                }
+                completeAdminSignIn(PhoneAuthProvider.getCredential(id, code), adminPhone)
+            }
+            .setNegativeButton("रद्द", null)
+            .show()
+    }
+
+    private fun completeAdminSignIn(credential: PhoneAuthCredential, adminPhone: String) {
+        firebaseAuth.signInWithCredential(credential).addOnCompleteListener(this) { task ->
+            if (!task.isSuccessful) {
+                showMessage("OTP पडताळणी अयशस्वी. पुन्हा प्रयत्न करा.")
+                return@addOnCompleteListener
+            }
+            if (firebaseAuth.currentUser?.phoneNumber != adminPhone) {
+                firebaseAuth.signOut()
+                showMessage("हा नंबर अधिकृत Admin नंबर नाही.")
+                return@addOnCompleteListener
+            }
+            showMessage("Admin OTP पडताळणी यशस्वी.")
+            showAdminLoginStatus()
+        }
+    }
+
+    private fun showAdminLoginStatus() {
+        AlertDialog.Builder(this)
+            .setTitle("Admin OTP पडताळणी यशस्वी")
+            .setMessage("अधिकृत Admin नंबरची Firebase OTP पडताळणी झाली आहे.\\n\\nसेवा शुल्क बदलण्याची सुविधा पुढील टप्प्यात जोडली जाईल.")
             .setPositiveButton("ठीक आहे", null)
+            .setNegativeButton("Logout") { _, _ -> firebaseAuth.signOut() }
             .show()
     }
 
