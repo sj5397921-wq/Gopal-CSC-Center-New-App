@@ -42,7 +42,7 @@ class MainActivity : AppCompatActivity() {
     private var pendingPdfFile: File? = null
     private val createPdfRequest = 701
     private val selectedApplicationDocuments = mutableListOf<android.net.Uri>()
-    private var applicationDocumentsLabel: TextView? = null
+    private var applicationDocumentsContainer: LinearLayout? = null
     private val chooseApplicationDocumentsRequest = 704
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -192,21 +192,23 @@ class MainActivity : AppCompatActivity() {
         val fee = addField(fields, "सेवा शुल्क (₹)", InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL)
         val reference = addField(fields, "अर्ज / संदर्भ क्रमांक (ऐच्छिक)")
         selectedApplicationDocuments.clear()
-        applicationDocumentsLabel = TextView(this).apply {
-            text = "अद्याप कोणतेही कागदपत्र जोडलेले नाही."
-            textSize = 14f
-            setTextColor(Color.DKGRAY)
+        applicationDocumentsContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
             setPadding(4, 6, 4, 6)
         }
-        fields.addView(applicationDocumentsLabel)
-        addButton(fields, "कागदपत्रे निवडा (PDF / फोटो)") {
-            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                addCategory(Intent.CATEGORY_OPENABLE)
-                type = "*/*"
-                putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+        fields.addView(applicationDocumentsContainer)
+        refreshApplicationDocumentsList()
+        addButton(fields, "＋ कागदपत्र जोडा (PDF / फोटो)") {
+            if (selectedApplicationDocuments.size >= 10) {
+                showMessage("जास्तीत जास्त 10 कागदपत्रे जोडता येतील.")
+            } else {
+                val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = "*/*"
+                }
+                @Suppress("DEPRECATION")
+                startActivityForResult(intent, chooseApplicationDocumentsRequest)
             }
-            @Suppress("DEPRECATION")
-            startActivityForResult(intent, chooseApplicationDocumentsRequest)
         }
 
         val paymentLabel = TextView(this).apply {
@@ -922,6 +924,73 @@ class MainActivity : AppCompatActivity() {
         render()
         addButton(page, "मुख्य पानावर जा") { showHome() }
         setContentView(page)
+    }
+
+    private fun getApplicationDocumentName(uri: android.net.Uri): String {
+        var name = uri.lastPathSegment?.substringAfterLast('/') ?: "कागदपत्र"
+        contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (cursor.moveToFirst() && index >= 0) name = cursor.getString(index) ?: name
+        }
+        return name
+    }
+
+    private fun refreshApplicationDocumentsList() {
+        val container = applicationDocumentsContainer ?: return
+        container.removeAllViews()
+        if (selectedApplicationDocuments.isEmpty()) {
+            container.addView(TextView(this).apply {
+                text = "अद्याप कोणतेही कागदपत्र जोडलेले नाही."
+                textSize = 14f
+                setTextColor(Color.DKGRAY)
+                setPadding(4, 6, 4, 6)
+            })
+            return
+        }
+        container.addView(TextView(this).apply {
+            text = "निवडलेली कागदपत्रे (${selectedApplicationDocuments.size}/10)"
+            textSize = 15f
+            setTextColor(Color.rgb(20, 80, 160))
+            setPadding(4, 8, 4, 4)
+        })
+        selectedApplicationDocuments.toList().forEachIndexed { index, uri ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(2, 2, 2, 2)
+            }
+            row.addView(TextView(this).apply {
+                text = "${index + 1}. ${getApplicationDocumentName(uri)}"
+                textSize = 13f
+                setTextColor(Color.DKGRAY)
+                maxLines = 2
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(Button(this).apply {
+                text = "काढा"
+                textSize = 12f
+                isAllCaps = false
+                setOnClickListener {
+                    selectedApplicationDocuments.remove(uri)
+                    refreshApplicationDocumentsList()
+                }
+            })
+            row.addView(Button(this).apply {
+                text = "बदला"
+                textSize = 12f
+                isAllCaps = false
+                setOnClickListener {
+                    selectedApplicationDocuments.remove(uri)
+                    refreshApplicationDocumentsList()
+                    val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                        type = "*/*"
+                    }
+                    @Suppress("DEPRECATION")
+                    startActivityForResult(intent, chooseApplicationDocumentsRequest)
+                }
+            })
+            container.addView(row)
+        }
     }
 
     private fun persistApplicationDocuments(billNumber: String, uris: List<android.net.Uri>): JSONArray {
@@ -1705,19 +1774,22 @@ class MainActivity : AppCompatActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == chooseApplicationDocumentsRequest && resultCode == RESULT_OK) {
-            selectedApplicationDocuments.clear()
-            val clip = data?.clipData
-            if (clip != null) {
-                for (i in 0 until minOf(clip.itemCount, 10)) selectedApplicationDocuments.add(clip.getItemAt(i).uri)
-            } else {
-                data?.data?.let { selectedApplicationDocuments.add(it) }
+            val uri = data?.data
+            if (uri != null) {
+                if (selectedApplicationDocuments.size < 10) {
+                    if (!selectedApplicationDocuments.contains(uri)) {
+                        selectedApplicationDocuments.add(uri)
+                        try {
+                            val readFlag = data.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            contentResolver.takePersistableUriPermission(uri, readFlag)
+                        } catch (_: Exception) { }
+                    }
+                    refreshApplicationDocumentsList()
+                    showMessage("कागदपत्र जोडले. आणखी कागदपत्रांसाठी “कागदपत्र जोडा” दाबा.")
+                } else {
+                    showMessage("जास्तीत जास्त 10 कागदपत्रे जोडता येतील.")
+                }
             }
-            applicationDocumentsLabel?.text = if (selectedApplicationDocuments.isEmpty()) {
-                "अद्याप कोणतेही कागदपत्र जोडलेले नाही."
-            } else {
-                "निवडलेली कागदपत्रे: ${selectedApplicationDocuments.size}\n" + selectedApplicationDocuments.mapIndexed { index, uri -> "${index + 1}. ${uri.lastPathSegment?.substringAfterLast('/') ?: "फाइल"}" }.joinToString("\n")
-            }
-            if (selectedApplicationDocuments.isNotEmpty()) showMessage("${selectedApplicationDocuments.size} कागदपत्रे निवडली आहेत. बिल तयार करताना ती अर्जासोबत सेव्ह होतील.")
         }
         if (requestCode == createPdfRequest && resultCode == RESULT_OK) {
             val source = pendingPdfFile ?: return
