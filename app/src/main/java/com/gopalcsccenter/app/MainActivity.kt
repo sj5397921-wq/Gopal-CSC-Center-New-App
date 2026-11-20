@@ -443,13 +443,21 @@ class MainActivity : AppCompatActivity() {
                     isClickable = true
                     isFocusable = true
                     setOnClickListener {
-                        val selected = statuses.indexOf(status).let { if (it < 0) 0 else it }
-                        AlertDialog.Builder(this@MainActivity).setTitle("अर्ज स्थिती बदला")
-                            .setSingleChoiceItems(statuses, selected) { dialog, which ->
-                                updateApplicationStatus(billNo, statuses[which])
-                                dialog.dismiss()
-                                render()
-                            }.setNegativeButton("रद्द", null).show()
+                        AlertDialog.Builder(this@MainActivity)
+                            .setTitle("अर्ज पर्याय")
+                            .setItems(arrayOf("अर्जाची स्थिती बदला", "अर्ज पावती PDF / WhatsApp")) { _, choice ->
+                                if (choice == 0) {
+                                    val selected = statuses.indexOf(status).let { if (it < 0) 0 else it }
+                                    AlertDialog.Builder(this@MainActivity).setTitle("अर्ज स्थिती बदला")
+                                        .setSingleChoiceItems(statuses, selected) { dialog, which ->
+                                            updateApplicationStatus(billNo, statuses[which])
+                                            dialog.dismiss()
+                                            render()
+                                        }.setNegativeButton("रद्द", null).show()
+                                } else {
+                                    showApplicationReceipt(item)
+                                }
+                            }.setNegativeButton("बंद", null).show()
                     }
                 }
                 results.addView(row, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { setMargins(0, 5, 0, 5) })
@@ -464,6 +472,45 @@ class MainActivity : AppCompatActivity() {
         render()
         addButton(page, "मुख्य पानावर जा") { showHome() }
         setContentView(page)
+    }
+
+    private fun showApplicationReceipt(item: JSONObject) {
+        val appNo = item.optString("applicationNo", "GAPP" + item.optString("billNumber").takeLast(8))
+        val billNo = item.optString("billNumber")
+        val date = item.optString("date")
+        val receipt = """
+            GOPAL CSC CENTER
+            ==============================
+                 अर्ज प्राप्ती पावती
+            ==============================
+            अर्ज क्रमांक: $appNo
+            बिल क्रमांक: $billNo
+            दिनांक: $date
+
+            ग्राहकाचे नाव: ${item.optString("customerName")}
+            मोबाईल नंबर: ${item.optString("phone")}
+            सेवा: ${item.optString("service")}
+            संदर्भ क्रमांक: ${item.optString("reference").ifBlank { "नाही" }}
+
+            अर्जाची सद्यस्थिती:
+            ${item.optString("applicationStatus", "अर्ज प्राप्त")}
+
+            सेवा शुल्क: Rs. ${String.format(Locale.US, "%.2f", item.optDouble("amount", 0.0))}
+            पेमेंट स्थिती: ${item.optString("paymentStatus")}
+
+            संचालक: Suresh Jadhav
+            संपर्क: 7875277904
+            UPI: 7875277904@ybl
+            ==============================
+                 धन्यवाद!
+        """.trimIndent()
+        val safeName = appNo.replace(Regex("[^A-Za-z0-9_-]"), "_")
+        val pdf = createReceiptPdf(receipt, "Application-$safeName")
+        AlertDialog.Builder(this).setTitle("अर्ज पावती")
+            .setMessage(receipt)
+            .setPositiveButton("PDF डाउनलोड") { _, _ -> savePdf(pdf, "Arj-Pavati-$safeName") }
+            .setNeutralButton("WhatsApp शेअर") { _, _ -> sharePdf(pdf) }
+            .setNegativeButton("बंद", null).show()
     }
 
     private fun updateApplicationStatus(billNumber: String, status: String) {
