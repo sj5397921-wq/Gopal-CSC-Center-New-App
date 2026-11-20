@@ -1922,7 +1922,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun showAdminInfo() {
         if (firebaseAuth.currentUser?.email == authorizedAdminEmail) {
-            showAdminFeePanel()
+            showAdminDashboard()
             return
         }
         val page = createLayout()
@@ -1949,12 +1949,116 @@ class MainActivity : AppCompatActivity() {
                         showMessage("Login अयशस्वी. ID / Password तपासा.")
                     } else {
                         showMessage("Admin Login यशस्वी.")
-                        showAdminFeePanel()
+                        showAdminDashboard()
                     }
                 }
         }
         addButton(page, "मुख्य पानावर जा") { showHome() }
         setContentView(page)
+    }
+
+
+    private fun showAdminDashboard() {
+        if (firebaseAuth.currentUser?.email != authorizedAdminEmail) {
+            firebaseAuth.signOut()
+            showMessage("Admin प्रवेश नाकारला.")
+            showHome()
+            return
+        }
+
+        val records = loadBillRecords()
+        val today = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
+        var todayBills = 0
+        var todayIncome = 0.0
+        var pendingApplications = 0
+
+        for (i in 0 until records.length()) {
+            val item = records.optJSONObject(i) ?: continue
+            val status = item.optString("applicationStatus", "अर्ज प्राप्त")
+            if (status != "पूर्ण") pendingApplications++
+
+            val createdAt = item.optLong("createdAt", 0L)
+            if (createdAt > 0L &&
+                SimpleDateFormat("yyyyMMdd", Locale.US).format(Date(createdAt)) == today
+            ) {
+                todayBills++
+                val paymentStatus = item.optString("paymentStatus")
+                if (paymentStatus == "रोख भरले" || paymentStatus == "UPI भरले") {
+                    todayIncome += item.optDouble("amount", 0.0)
+                }
+            }
+        }
+
+        val page = createLayout()
+        addTitle(page, "Admin Dashboard")
+        val subtitle = TextView(this).apply {
+            text = "आजचा व्यवसाय आणि अर्जांची स्थिती"
+            textSize = 15f
+            setTextColor(Color.DKGRAY)
+            gravity = Gravity.CENTER
+            setPadding(4, 0, 4, 14)
+        }
+        page.addView(subtitle)
+
+        fun addDashboardCard(title: String, value: String, description: String) {
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(18, 16, 18, 16)
+                setBackgroundColor(Color.rgb(240, 245, 250))
+            }
+            card.addView(TextView(this).apply {
+                text = title
+                textSize = 16f
+                setTextColor(Color.DKGRAY)
+            })
+            card.addView(TextView(this).apply {
+                text = value
+                textSize = 27f
+                setTextColor(Color.rgb(20, 80, 160))
+                setPadding(0, 6, 0, 4)
+            })
+            card.addView(TextView(this).apply {
+                text = description
+                textSize = 12f
+                setTextColor(Color.GRAY)
+            })
+            page.addView(card, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(0, 7, 0, 7) })
+        }
+
+        addDashboardCard(
+            "आजचे एकूण उत्पन्न",
+            "₹" + String.format(Locale.US, "%.2f", todayIncome),
+            "आज प्रत्यक्ष जमा झालेले रोख + UPI पेमेंट"
+        )
+        addDashboardCard(
+            "आजची एकूण बिले",
+            todayBills.toString(),
+            "आज तयार केलेली सर्व बिले"
+        )
+        addDashboardCard(
+            "प्रलंबित अर्ज",
+            pendingApplications.toString(),
+            "पूर्ण स्थितीत नसलेले सर्व अर्ज"
+        )
+
+        addButton(page, "सेवा शुल्क व्यवस्थापन") { showAdminFeePanel() }
+        addButton(page, "Dashboard पुन्हा अपडेट करा") { showAdminDashboard() }
+        addButton(page, "Logout") {
+            firebaseAuth.signOut()
+            showMessage("Admin Logout झाले.")
+            showHome()
+        }
+        addButton(page, "मुख्य पानावर जा") { showHome() }
+        setContentView(ScrollView(this).apply {
+            isFillViewport = true
+            addView(page, android.view.ViewGroup.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+            ))
+        })
     }
 
     private fun showAdminFeePanel() {
@@ -1966,6 +2070,7 @@ class MainActivity : AppCompatActivity() {
         }
         val page = createLayout()
         addTitle(page, "Admin नियंत्रण — सेवा शुल्क")
+        addButton(page, "Admin Dashboard") { showAdminDashboard() }
         val note = TextView(this).apply {
             text = "प्रत्येक सेवेचे शुल्क बदला आणि Save करा. ग्राहकांना हे शुल्क फक्त पाहता येईल. नवीन बिलात नवीन शुल्क लागू होईल; जुन्या बिलांची रक्कम बदलणार नाही."
             textSize = 14f
