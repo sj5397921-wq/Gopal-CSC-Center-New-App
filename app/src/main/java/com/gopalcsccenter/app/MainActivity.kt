@@ -116,6 +116,7 @@ class MainActivity : AppCompatActivity() {
         addButton(layout, "ग्राहक / बिल इतिहास") { showBillHistory() }
         addButton(layout, "ग्राहक पेमेंट रिमाइंडर") { showPaymentReminders() }
         addButton(layout, "ग्राहक यादी / संपूर्ण इतिहास") { showCustomerDirectory() }
+        addButton(layout, "ग्राहक खाते उतारा (Customer Ledger)") { showCustomerLedger() }
         addButton(layout, "अर्ज ट्रॅकिंग") { showApplicationTracking() }
         addButton(layout, "दैनिक उत्पन्न अहवाल") { showDailyIncomeReport() }
         addButton(layout, "मासिक उत्पन्न अहवाल") { showMonthlyIncomeReport() }
@@ -408,6 +409,136 @@ class MainActivity : AppCompatActivity() {
             override fun afterTextChanged(s: android.text.Editable?) {}
         })
         renderCustomers()
+        addButton(page, "मुख्य पानावर जा") { showHome() }
+        setContentView(page)
+    }
+
+    private fun showCustomerLedger() {
+        val page = createLayout()
+        addTitle(page, "ग्राहक खाते उतारा")
+        val search = addField(page, "ग्राहकाचे नाव किंवा मोबाईल नंबर शोधा")
+        val summary = TextView(this).apply {
+            textSize = 15f
+            setTextColor(Color.rgb(20, 80, 160))
+            setPadding(4, 8, 4, 12)
+        }
+        page.addView(summary)
+        val scroll = ScrollView(this)
+        val results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        scroll.addView(results)
+        page.addView(scroll, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+        ))
+
+        fun renderLedgerCustomers() {
+            results.removeAllViews()
+            val records = loadBillRecords()
+            val grouped = linkedMapOf<String, MutableList<JSONObject>>()
+            for (i in 0 until records.length()) {
+                val item = records.optJSONObject(i) ?: continue
+                val phone = item.optString("phone").trim()
+                if (phone.isNotBlank()) grouped.getOrPut(phone) { mutableListOf() }.add(item)
+            }
+            val query = search.text.toString().trim()
+            val customers = grouped.entries.filter { entry ->
+                val latest = entry.value.maxByOrNull { it.optLong("createdAt", 0L) }
+                val name = latest?.optString("customerName") ?: ""
+                query.isBlank() || name.contains(query, ignoreCase = true) || entry.key.contains(query)
+            }.sortedByDescending { entry ->
+                entry.value.maxOfOrNull { it.optLong("createdAt", 0L) } ?: 0L
+            }
+            summary.text = "एकूण ग्राहक: ${customers.size}"
+            if (customers.isEmpty()) {
+                results.addView(TextView(this).apply {
+                    text = "ग्राहक नोंदी उपलब्ध नाहीत किंवा शोध जुळत नाही."
+                    textSize = 16f
+                    setTextColor(Color.DKGRAY)
+                    gravity = Gravity.CENTER
+                    setPadding(12, 24, 12, 24)
+                })
+                return
+            }
+            customers.forEach { entry ->
+                val bills = entry.value.sortedBy { it.optLong("createdAt", 0L) }
+                val latest = bills.last()
+                val name = latest.optString("customerName", "ग्राहक")
+                val total = bills.sumOf { it.optDouble("amount", 0.0) }
+                val received = bills.filter {
+                    it.optString("paymentStatus") == "रोख भरले" ||
+                        it.optString("paymentStatus") == "UPI भरले"
+                }.sumOf { it.optDouble("amount", 0.0) }
+                val pending = bills.filter { it.optString("paymentStatus") == "बाकी" }
+                    .sumOf { it.optDouble("amount", 0.0) }
+                val row = TextView(this).apply {
+                    text = "$name\nमोबाईल: ${entry.key}\nबिले: ${bills.size}  |  एकूण: ₹" +
+                        String.format(Locale.US, "%.2f", total) +
+                        "\nजमा: ₹" + String.format(Locale.US, "%.2f", received) +
+                        "  |  बाकी: ₹" + String.format(Locale.US, "%.2f", pending) +
+                        "\nखाते उतारा पाहण्यासाठी टॅप करा"
+                    textSize = 15f
+                    setTextColor(Color.BLACK)
+                    setPadding(14, 14, 14, 14)
+                    setBackgroundColor(Color.rgb(240, 245, 250))
+                    isClickable = true
+                    isFocusable = true
+                    setOnClickListener {
+                        val ledgerLines = mutableListOf<String>()
+                        ledgerLines.add("GOPAL CSC CENTER")
+                        ledgerLines.add("CUSTOMER ACCOUNT STATEMENT")
+                        ledgerLines.add("ग्राहकाचे नाव: $name")
+                        ledgerLines.add("मोबाईल नंबर: ${entry.key}")
+                        ledgerLines.add("अहवाल दिनांक: " + SimpleDateFormat("dd-MM-yyyy", Locale.US).format(Date()))
+                        ledgerLines.add("----------------------------------------------")
+                        ledgerLines.add("एकूण बिले: ${bills.size}")
+                        ledgerLines.add("एकूण बिल रक्कम: ₹" + String.format(Locale.US, "%.2f", total))
+                        ledgerLines.add("जमा रक्कम: ₹" + String.format(Locale.US, "%.2f", received))
+                        ledgerLines.add("बाकी रक्कम: ₹" + String.format(Locale.US, "%.2f", pending))
+                        ledgerLines.add("----------------------------------------------")
+                        ledgerLines.add("बिलनिहाय व्यवहार तपशील:")
+                        bills.forEachIndexed { index, bill ->
+                            ledgerLines.add("${index + 1}. बिल क्रमांक: ${bill.optString("billNumber")}")
+                            ledgerLines.add("दिनांक: ${bill.optString("date")}")
+                            ledgerLines.add("सेवा: ${bill.optString("service")}")
+                            ledgerLines.add("रक्कम: ₹" + String.format(Locale.US, "%.2f", bill.optDouble("amount", 0.0)))
+                            ledgerLines.add("पेमेंट स्थिती: ${bill.optString("paymentStatus")}")
+                            ledgerLines.add("----------------------------------------------")
+                        }
+                        ledgerLines.add("Gopal CSC Center | धन्यवाद!")
+                        val detailText = ledgerLines.joinToString("\n")
+                        val content = TextView(this@MainActivity).apply {
+                            text = detailText
+                            textSize = 15f
+                            setTextColor(Color.BLACK)
+                            setPadding(24, 12, 24, 12)
+                        }
+                        val detailScroll = ScrollView(this@MainActivity).apply { addView(content) }
+                        AlertDialog.Builder(this@MainActivity)
+                            .setTitle("$name - खाते उतारा")
+                            .setView(detailScroll)
+                            .setPositiveButton("PDF डाउनलोड") { _, _ ->
+                                val pdf = createCustomerLedgerPdf(ledgerLines)
+                                savePdf(pdf, "Ledger-${entry.key}")
+                            }
+                            .setNeutralButton("प्रिंट") { _, _ ->
+                                val pdf = createCustomerLedgerPdf(ledgerLines)
+                                openPdf(pdf)
+                            }
+                            .setNegativeButton("बंद", null)
+                            .show()
+                    }
+                }
+                results.addView(row, LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { setMargins(0, 5, 0, 5) })
+            }
+        }
+
+        search.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { renderLedgerCustomers() }
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        })
+        renderLedgerCustomers()
         addButton(page, "मुख्य पानावर जा") { showHome() }
         setContentView(page)
     }
@@ -1396,6 +1527,66 @@ class MainActivity : AppCompatActivity() {
         receipt.lines().forEach { line -> page.canvas.drawText(line, 40f, y, paint); y += 30f }
         document.finishPage(page)
         val file = File(cacheDir, "Gopal-CSC-$billNumber.pdf")
+        FileOutputStream(file).use { document.writeTo(it) }
+        document.close()
+        return file
+    }
+
+    private fun createCustomerLedgerPdf(lines: List<String>): File {
+        val document = PdfDocument()
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.BLACK
+            textSize = 13f
+        }
+        val pageWidth = 595
+        val pageHeight = 842
+        val left = 40f
+        val maxWidth = pageWidth - 80f
+        var pageNumber = 0
+        var page: PdfDocument.Page? = null
+        var y = 55f
+
+        fun startNewPage() {
+            pageNumber++
+            page = document.startPage(
+                PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create()
+            )
+            y = 55f
+        }
+
+        fun finishCurrentPage() {
+            val current = page ?: return
+            document.finishPage(current)
+            page = null
+        }
+
+        startNewPage()
+        lines.forEach { original ->
+            val words = original.split(" ")
+            var currentLine = ""
+            val wrapped = mutableListOf<String>()
+            words.forEach { word ->
+                val candidate = if (currentLine.isEmpty()) word else "$currentLine $word"
+                if (paint.measureText(candidate) > maxWidth && currentLine.isNotEmpty()) {
+                    wrapped.add(currentLine)
+                    currentLine = word
+                } else {
+                    currentLine = candidate
+                }
+            }
+            if (currentLine.isNotEmpty()) wrapped.add(currentLine)
+            if (wrapped.isEmpty()) wrapped.add("")
+            wrapped.forEach { line ->
+                if (y > pageHeight - 55f) {
+                    finishCurrentPage()
+                    startNewPage()
+                }
+                page?.canvas?.drawText(line, left, y, paint)
+                y += 22f
+            }
+        }
+        finishCurrentPage()
+        val file = File(cacheDir, "Gopal-CSC-Customer-Ledger.pdf")
         FileOutputStream(file).use { document.writeTo(it) }
         document.close()
         return file
