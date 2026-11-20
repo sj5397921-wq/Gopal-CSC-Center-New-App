@@ -114,6 +114,7 @@ class MainActivity : AppCompatActivity() {
 
         addButton(layout, "उपलब्ध सेवा") { showServices() }
         addButton(layout, "ग्राहक / बिल इतिहास") { showBillHistory() }
+        addButton(layout, "ग्राहक पेमेंट रिमाइंडर") { showPaymentReminders() }
         addButton(layout, "ग्राहक यादी / संपूर्ण इतिहास") { showCustomerDirectory() }
         addButton(layout, "अर्ज ट्रॅकिंग") { showApplicationTracking() }
         addButton(layout, "दैनिक उत्पन्न अहवाल") { showDailyIncomeReport() }
@@ -546,6 +547,121 @@ class MainActivity : AppCompatActivity() {
             override fun afterTextChanged(s: android.text.Editable?) {}        })
 
         renderResults()
+        addButton(page, "मुख्य पानावर जा") { showHome() }
+        setContentView(page)
+    }
+
+
+    private fun showPaymentReminders() {
+        val page = createLayout()
+        addTitle(page, "ग्राहक पेमेंट रिमाइंडर")
+        val search = addField(page, "ग्राहकाचे नाव किंवा मोबाईल नंबर शोधा")
+        val summary = TextView(this).apply {
+            textSize = 16f
+            setTextColor(Color.rgb(20, 80, 160))
+            setPadding(4, 8, 4, 12)
+        }
+        page.addView(summary)
+        val scroll = ScrollView(this)
+        val results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        scroll.addView(results)
+        page.addView(scroll, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+        ))
+
+        fun renderPendingCustomers() {
+            results.removeAllViews()
+            val records = loadBillRecords()
+            val grouped = linkedMapOf<String, MutableList<JSONObject>>()
+            for (i in 0 until records.length()) {
+                val item = records.optJSONObject(i) ?: continue
+                if (item.optString("paymentStatus") != "बाकी") continue
+                val phone = item.optString("phone").filter { it.isDigit() }
+                if (phone.length != 10) continue
+                grouped.getOrPut(phone) { mutableListOf() }.add(item)
+            }
+
+            val query = search.text.toString().trim()
+            val customers = grouped.entries.mapNotNull { entry ->
+                val bills = entry.value
+                val latest = bills.maxByOrNull { it.optLong("createdAt", 0L) } ?: return@mapNotNull null
+                val name = latest.optString("customerName", "ग्राहक")
+                if (query.isNotEmpty() &&
+                    !name.contains(query, ignoreCase = true) &&
+                    !entry.key.contains(query)) return@mapNotNull null
+                Triple(entry.key, bills, latest)
+            }.sortedByDescending { it.second.maxOfOrNull { bill -> bill.optLong("createdAt", 0L) } ?: 0L }
+
+            val totalPending = customers.sumOf { customer ->
+                customer.second.sumOf { it.optDouble("amount", 0.0) }
+            }
+            summary.text = "बाकी असलेले ग्राहक: ${customers.size}\nएकूण बाकी रक्कम: ₹" +
+                String.format(Locale.US, "%.2f", totalPending)
+
+            if (customers.isEmpty()) {
+                results.addView(TextView(this).apply {
+                    text = if (query.isBlank()) "सध्या कोणत्याही ग्राहकाचे पेमेंट बाकी नाही."
+                        else "या शोधासाठी बाकी पेमेंट सापडले नाही."
+                    textSize = 16f
+                    setTextColor(Color.DKGRAY)
+                    gravity = Gravity.CENTER
+                    setPadding(12, 24, 12, 24)
+                })
+                return
+            }
+
+            customers.forEach { customer ->
+                val phone = customer.first
+                val bills = customer.second
+                val latest = customer.third
+                val name = latest.optString("customerName", "ग्राहक")
+                val pendingAmount = bills.sumOf { it.optDouble("amount", 0.0) }
+                val billNumbers = bills.joinToString(", ") { it.optString("billNumber") }
+                val card = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(12, 10, 12, 10)
+                    setBackgroundColor(Color.rgb(240, 245, 250))
+                }
+                card.addView(TextView(this).apply {
+                    text = "$name\nमोबाईल: $phone\nबाकी बिले: ${bills.size}\nबाकी रक्कम: ₹" +
+                        String.format(Locale.US, "%.2f", pendingAmount) +
+                        "\nबिल क्रमांक: $billNumbers"
+                    textSize = 16f
+                    setTextColor(Color.BLACK)
+                    setPadding(4, 4, 4, 8)
+                })
+                val smsButton = Button(this).apply {
+                    text = "SMS रिमाइंडर तयार करा"
+                    isAllCaps = false
+                    setOnClickListener {
+                        val message = "नमस्कार $name, Gopal CSC Center येथे आपल्या " +
+                            "${bills.size} बिलांची एकूण ₹" +
+                            String.format(Locale.US, "%.2f", pendingAmount) +
+                            " रक्कम बाकी आहे. बिल क्रमांक: $billNumbers. कृपया पेमेंट करावे. " +
+                            "धन्यवाद! - Gopal CSC Center"
+                        AlertDialog.Builder(this@MainActivity)
+                            .setTitle("SMS तपासा")
+                            .setMessage("प्रति: $phone\n\n$message\n\nSMS अॅप उघडून तुम्ही स्वतः पाठवू शकता.")
+                            .setPositiveButton("SMS अॅप उघडा") { _, _ ->
+                                openSmsComposer(phone, message)
+                            }
+                            .setNegativeButton("रद्द", null)
+                            .show()
+                    }
+                }
+                card.addView(smsButton)
+                results.addView(card, LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { setMargins(0, 5, 0, 6) })
+            }
+        }
+
+        search.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { renderPendingCustomers() }
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        })
+        renderPendingCustomers()
         addButton(page, "मुख्य पानावर जा") { showHome() }
         setContentView(page)
     }
