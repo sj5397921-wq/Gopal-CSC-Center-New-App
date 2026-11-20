@@ -143,9 +143,9 @@ class MainActivity : AppCompatActivity() {
         val homeScroll = ScrollView(this).apply {
             isFillViewport = true
             isVerticalScrollBarEnabled = true
-            addView(layout, ScrollView.LayoutParams(
-                ScrollView.LayoutParams.MATCH_PARENT,
-                ScrollView.LayoutParams.WRAP_CONTENT
+            addView(layout, android.view.ViewGroup.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT
             ))
         }
         setContentView(homeScroll)
