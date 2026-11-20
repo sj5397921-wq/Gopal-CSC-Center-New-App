@@ -1,6 +1,7 @@
 package com.gopalcsccenter.app
 
 import android.os.Bundle
+import android.app.DatePickerDialog
 import android.content.Intent
 import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
@@ -285,19 +286,117 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showBillHistory() {
-        val records = loadBillRecords()
-        if (records.length() == 0) { showMessage("अजून कोणतेही बिल जतन झालेले नाही."); return }
-        val labels = ArrayList<String>()
-        val receipts = ArrayList<String>()
-        for (i in records.length() - 1 downTo 0) {
-            val item = records.optJSONObject(i) ?: continue
-            labels.add(item.optString("billNumber") + " | " + item.optString("customerName") + " | Rs." + item.optString("amount") + " | " + item.optString("date"))
-            receipts.add(item.optString("receipt"))
+        val page = createLayout()
+        addTitle(page, "ग्राहक / बिल इतिहास")
+
+        val search = addField(page, "ग्राहकाचे नाव किंवा मोबाईल नंबर शोधा")
+        val dateLabel = TextView(this).apply {
+            text = "निवडलेली तारीख: सर्व दिवस"
+            textSize = 15f
+            setTextColor(Color.DKGRAY)
+            setPadding(4, 8, 4, 8)
         }
-        AlertDialog.Builder(this).setTitle("ग्राहक / बिल इतिहास (" + labels.size + ")")
-            .setItems(labels.toTypedArray()) { _, which ->
-                AlertDialog.Builder(this).setTitle("बिल तपशील").setMessage(receipts[which]).setPositiveButton("बंद", null).show()
-            }.setNegativeButton("बंद", null).show()
+        page.addView(dateLabel)
+        var selectedDate = ""
+
+        val dateButtons = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        val chooseDate = Button(this).apply {
+            text = "तारीख निवडा"
+            isAllCaps = false
+        }
+        val clearDate = Button(this).apply {
+            text = "तारीख काढा"
+            isAllCaps = false
+        }
+        dateButtons.addView(chooseDate, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        dateButtons.addView(clearDate, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        page.addView(dateButtons)
+
+        val scroll = ScrollView(this)
+        val results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        scroll.addView(results)
+        page.addView(scroll, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+        ))
+
+        fun renderResults() {
+            results.removeAllViews()
+            val records = loadBillRecords()
+            val query = search.text.toString().trim()
+            var count = 0
+            for (i in records.length() - 1 downTo 0) {
+                val item = records.optJSONObject(i) ?: continue
+                val name = item.optString("customerName")
+                val phone = item.optString("phone")
+                val matchesText = query.isEmpty() || name.contains(query, ignoreCase = true) || phone.contains(query)
+                val matchesDate = selectedDate.isEmpty() ||
+                    SimpleDateFormat("yyyyMMdd", Locale.US).format(Date(item.optLong("createdAt", 0L))) == selectedDate
+                if (!matchesText || !matchesDate) continue
+                count++
+                val receipt = item.optString("receipt")
+                val row = TextView(this).apply {
+                    text = name + " | " + phone + "\n" +
+                        item.optString("billNumber") + " | ₹" + item.optString("amount") +
+                        "\n" + item.optString("date") + " | " + item.optString("paymentStatus")
+                    textSize = 16f
+                    setTextColor(Color.BLACK)
+                    setPadding(14, 14, 14, 14)
+                    setBackgroundColor(Color.rgb(240, 245, 250))
+                    isClickable = true
+                    isFocusable = true
+                    setOnClickListener {
+                        AlertDialog.Builder(this@MainActivity).setTitle("बिल तपशील")
+                            .setMessage(receipt).setPositiveButton("बंद", null).show()
+                    }
+                }
+                results.addView(row, LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { setMargins(0, 5, 0, 5) })
+            }
+            if (count == 0) {
+                val empty = TextView(this).apply {
+                    text = "या शोधासाठी कोणतेही बिल सापडले नाही."
+                    textSize = 16f
+                    setTextColor(Color.DKGRAY)
+                    gravity = Gravity.CENTER
+                    setPadding(12, 24, 12, 24)
+                }
+                results.addView(empty)
+            }
+            dateLabel.text = if (selectedDate.isEmpty()) "निवडलेली तारीख: सर्व दिवस"
+                else "निवडलेली तारीख: " + SimpleDateFormat("dd-MM-yyyy", Locale.US).format(
+                    SimpleDateFormat("yyyyMMdd", Locale.US).parse(selectedDate)!!
+                )
+            page.contentDescription = "एकूण सापडलेली बिले: $count"
+        }
+
+        chooseDate.setOnClickListener {
+            val calendar = java.util.Calendar.getInstance()
+            DatePickerDialog(this, { _, year, month, day ->
+                val selected = java.util.Calendar.getInstance().apply {
+                    set(year, month, day, 12, 0, 0)
+                }
+                selectedDate = SimpleDateFormat("yyyyMMdd", Locale.US).format(selected.time)
+                renderResults()
+            }, calendar.get(java.util.Calendar.YEAR), calendar.get(java.util.Calendar.MONTH),
+                calendar.get(java.util.Calendar.DAY_OF_MONTH)).show()
+        }
+        clearDate.setOnClickListener {
+            selectedDate = ""
+            renderResults()
+        }
+        search.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { renderResults() }
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        })
+
+        renderResults()
+        addButton(page, "मुख्य पानावर जा") { showHome() }
+        setContentView(page)
     }
 
     private fun showDailyIncomeReport() {
