@@ -577,12 +577,30 @@ class MainActivity : AppCompatActivity() {
         page.addView(serviceSpinner)
 
         val hint = TextView(this).apply {
-            text = "मिळालेल्या कागदपत्रांसमोर टिकमार्क करा. निवड आपोआप सेव्ह होईल."
+            text = "कागदपत्रे टिकमार्क करा. नवीन कागदपत्र Add करा किंवा नको असलेले Delete करा."
             textSize = 14f
             setTextColor(Color.DKGRAY)
             setPadding(0, 10, 0, 10)
         }
         page.addView(hint)
+
+        val addRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val newDocument = EditText(this).apply {
+            hint = "नवीन कागदपत्राचे नाव"
+            textSize = 16f
+            setSingleLine(true)
+            setPadding(10, 8, 10, 8)
+        }
+        addRow.addView(newDocument, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        val addDocument = Button(this).apply {
+            text = "Add"
+            isAllCaps = false
+        }
+        addRow.addView(addDocument)
+        page.addView(addRow)
 
         val scroll = ScrollView(this)
         val checklistLayout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -591,7 +609,7 @@ class MainActivity : AppCompatActivity() {
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
         ))
 
-        val checklist = mapOf(
+        val defaultChecklist = mapOf(
             "आधार कार्ड सेवा" to listOf("आधार कार्ड (असल्यास)", "जन्म प्रमाणपत्र (बाल आधारसाठी)", "मोबाईल नंबर", "पत्ता / ओळख पुरावा (सेवेनुसार)"),
             "पॅन कार्ड सेवा" to listOf("आधार कार्ड", "मोबाईल नंबर", "ई-मेल आयडी", "फोटो व स्वाक्षरी (लागू असल्यास)"),
             "MahaDBT अर्ज" to listOf("आधार कार्ड", "बँक पासबुक", "7/12 उतारा (लागू असल्यास)", "8-A उतारा (लागू असल्यास)", "Farmer ID / जात प्रमाणपत्र (योजनेनुसार)"),
@@ -605,36 +623,108 @@ class MainActivity : AppCompatActivity() {
             "प्रिंट आणि झेरॉक्स" to listOf("मूळ कागदपत्रे किंवा स्पष्ट PDF / फोटो", "प्रिंटसाठी आवश्यक पानांची माहिती")
         )
 
+        val prefs = getSharedPreferences("gopal_csc_checklists", MODE_PRIVATE)
+        var currentService = services.first()
+
+        fun documentKey(service: String) = "documents_" + service.hashCode()
+        fun checkedKey(service: String) = "checked_" + service.hashCode()
+
+        fun loadDocuments(service: String): MutableList<String> {
+            val savedJson = prefs.getString(documentKey(service), null)
+            if (savedJson != null) {
+                return try {
+                    val array = JSONArray(savedJson)
+                    MutableList(array.length()) { index -> array.optString(index) }
+                        .filter { it.isNotBlank() }.toMutableList()
+                } catch (_: Exception) {
+                    (defaultChecklist[service] ?: listOf("संबंधित सेवेसाठी आवश्यक कागदपत्रे")).toMutableList()
+                }
+            }
+            return (defaultChecklist[service] ?: listOf("संबंधित सेवेसाठी आवश्यक कागदपत्रे")).toMutableList()
+        }
+
+        fun saveDocuments(service: String, documents: List<String>) {
+            val array = JSONArray()
+            documents.forEach { array.put(it) }
+            prefs.edit().putString(documentKey(service), array.toString()).apply()
+        }
+
         fun renderChecklist(service: String) {
+            currentService = service
             checklistLayout.removeAllViews()
-            val prefs = getSharedPreferences("gopal_csc_checklists", MODE_PRIVATE)
-            val key = "checked_" + service.hashCode()
-            val saved = prefs.getStringSet(key, emptySet())?.toMutableSet() ?: mutableSetOf()
-            (checklist[service] ?: listOf("संबंधित सेवेसाठी आवश्यक कागदपत्रे")).forEach { document ->
+            val documents = loadDocuments(service)
+            val checked = prefs.getStringSet(checkedKey(service), emptySet())?.toMutableSet() ?: mutableSetOf()
+
+            documents.forEach { document ->
+                val row = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(4, 2, 4, 2)
+                }
                 val check = CheckBox(this).apply {
                     text = document
                     textSize = 16f
-                    isChecked = saved.contains(document)
-                    setPadding(8, 10, 8, 10)
-                    setOnCheckedChangeListener { _, checked ->
-                        if (checked) saved.add(document) else saved.remove(document)
-                        prefs.edit().putStringSet(key, HashSet(saved)).apply()
+                    isChecked = checked.contains(document)
+                    setPadding(8, 8, 8, 8)
+                    setOnCheckedChangeListener { _, isChecked ->
+                        if (isChecked) checked.add(document) else checked.remove(document)
+                        prefs.edit().putStringSet(checkedKey(service), HashSet(checked)).apply()
                     }
                 }
-                checklistLayout.addView(check, LinearLayout.LayoutParams(
+                row.addView(check, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                val delete = Button(this).apply {
+                    text = "Delete"
+                    textSize = 12f
+                    isAllCaps = false
+                    setOnClickListener {
+                        AlertDialog.Builder(this@MainActivity)
+                            .setTitle("कागदपत्र Delete करायचे?")
+                            .setMessage(document)
+                            .setPositiveButton("Delete") { _, _ ->
+                                val updated = loadDocuments(service).filterNot { it == document }
+                                saveDocuments(service, updated)
+                                checked.remove(document)
+                                prefs.edit().putStringSet(checkedKey(service), HashSet(checked)).apply()
+                                renderChecklist(service)
+                                showMessage("कागदपत्र Delete झाले.")
+                            }
+                            .setNegativeButton("रद्द", null)
+                            .show()
+                    }
+                }
+                row.addView(delete)
+                checklistLayout.addView(row, LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
                 ))
             }
+
             val clear = Button(this).apply {
                 text = "या सेवेची टिकमार्क यादी रीसेट करा"
                 isAllCaps = false
                 setOnClickListener {
-                    saved.clear()
-                    prefs.edit().remove(key).apply()
+                    prefs.edit().remove(checkedKey(service)).apply()
                     renderChecklist(service)
                 }
             }
             checklistLayout.addView(clear)
+        }
+
+        addDocument.setOnClickListener {
+            val name = newDocument.text.toString().trim()
+            if (name.isEmpty()) {
+                newDocument.error = "कागदपत्राचे नाव टाका"
+                return@setOnClickListener
+            }
+            val documents = loadDocuments(currentService)
+            if (documents.any { it.equals(name, ignoreCase = true) }) {
+                newDocument.error = "हे कागदपत्र आधीच आहे"
+                return@setOnClickListener
+            }
+            documents.add(name)
+            saveDocuments(currentService, documents)
+            newDocument.text.clear()
+            renderChecklist(currentService)
+            showMessage("नवीन कागदपत्र Add झाले.")
         }
 
         serviceSpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
