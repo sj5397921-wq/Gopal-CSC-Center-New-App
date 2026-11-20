@@ -118,6 +118,7 @@ class MainActivity : AppCompatActivity() {
         addButton(layout, "दैनिक उत्पन्न अहवाल") { showDailyIncomeReport() }
         addButton(layout, "सेवानुसार उत्पन्न अहवाल") { showServiceIncomeReport() }
         addButton(layout, "Document Checklist") { showDocumentChecklist() }
+        addButton(layout, "डेटा बॅकअप / Restore") { showBackupRestore() }
         addButton(layout, "Admin Panel") { showAdminInfo() }
         addButton(layout, "Document Scanner") {
             showMessage("Document Scanner पुढील टप्प्यात जोडला जाईल.")
@@ -559,6 +560,98 @@ class MainActivity : AppCompatActivity() {
         showMessage("अर्ज स्थिती अपडेट झाली.")
     }
 
+
+    private var pendingBackupJson: String? = null
+
+    private fun showBackupRestore() {
+        AlertDialog.Builder(this)
+            .setTitle("डेटा बॅकअप / Restore")
+            .setMessage("बिलांची आणि Document Checklist मधील माहितीचा JSON बॅकअप तयार करा. Restore केल्यास बॅकअपमधील माहिती या फोनवर परत येईल.")
+            .setPositiveButton("बॅकअप तयार करा") { _, _ -> createBackupFile() }
+            .setNeutralButton("बॅकअप Restore") { _, _ -> chooseBackupFile() }
+            .setNegativeButton("बंद", null)
+            .show()
+    }
+
+    private fun createBackupFile() {
+        val root = JSONObject()
+        root.put("app", "Gopal CSC Center")
+        root.put("backupVersion", 1)
+        root.put("createdAt", System.currentTimeMillis())
+        val records = JSONObject()
+        records.put("bills", getSharedPreferences("gopal_csc_records", MODE_PRIVATE).getString("bills", "[]") ?: "[]")
+        root.put("records", records)
+
+        val checklistPrefs = getSharedPreferences("gopal_csc_checklists", MODE_PRIVATE)
+        val checklist = JSONObject()
+        checklistPrefs.all.forEach { (key, value) ->
+            when (value) {
+                is String -> checklist.put(key, JSONObject().put("type", "string").put("value", value))
+                is Set<*> -> {
+                    val values = JSONArray()
+                    value.filterIsInstance<String>().forEach { values.put(it) }
+                    checklist.put(key, JSONObject().put("type", "set").put("value", values))
+                }
+            }
+        }
+        root.put("checklists", checklist)
+        pendingBackupJson = root.toString(2)
+
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/json"
+            putExtra(Intent.EXTRA_TITLE, "Gopal-CSC-Backup.json")
+        }
+        @Suppress("DEPRECATION")
+        startActivityForResult(intent, 702)
+    }
+
+    private fun chooseBackupFile() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/json"
+        }
+        @Suppress("DEPRECATION")
+        startActivityForResult(intent, 703)
+    }
+
+    private fun restoreBackup(uri: android.net.Uri) {
+        try {
+            val jsonText = contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                ?: throw Exception("फाइल वाचता आली नाही")
+            val root = JSONObject(jsonText)
+            if (root.optString("app") != "Gopal CSC Center" || !root.has("records") || !root.has("checklists")) {
+                throw Exception("ही Gopal CSC Center ची वैध बॅकअप फाइल नाही.")
+            }
+            val bills = root.getJSONObject("records").optString("bills", "[]")
+            JSONArray(bills)
+            val checklist = root.getJSONObject("checklists")
+            val recordsPrefs = getSharedPreferences("gopal_csc_records", MODE_PRIVATE)
+            val checklistPrefs = getSharedPreferences("gopal_csc_checklists", MODE_PRIVATE)
+            val checklistEditor = checklistPrefs.edit().clear()
+            val keys = checklist.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                val entry = checklist.getJSONObject(key)
+                when (entry.optString("type")) {
+                    "string" -> checklistEditor.putString(key, entry.optString("value"))
+                    "set" -> {
+                        val values = entry.optJSONArray("value") ?: JSONArray()
+                        val set = mutableSetOf<String>()
+                        for (i in 0 until values.length()) set.add(values.optString(i))
+                        checklistEditor.putStringSet(key, set)
+                    }
+                }
+            }
+            recordsPrefs.edit().putString("bills", bills).apply()
+            checklistEditor.apply()
+            showMessage("बॅकअप Restore यशस्वी झाले.")
+            showHome()
+        } catch (e: Exception) {
+            showMessage("Restore अयशस्वी: " + (e.message ?: "फाइल तपासा"))
+        }
+    }
+
     private fun showDocumentChecklist() {
         val page = createLayout()
         addTitle(page, "आवश्यक कागदपत्रांची यादी")
@@ -841,6 +934,24 @@ class MainActivity : AppCompatActivity() {
             val uri = data?.data ?: return
             contentResolver.openOutputStream(uri)?.use { out -> FileInputStream(source).use { it.copyTo(out) } }
             showMessage("बिल PDF सेव्ह झाले.")
+        }
+        if (requestCode == 702 && resultCode == RESULT_OK) {
+            val uri = data?.data
+            val json = pendingBackupJson
+            if (uri != null && json != null) {
+                contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(json) }
+                showMessage("डेटा बॅकअप सेव्ह झाला.")
+            }
+            pendingBackupJson = null
+        }
+        if (requestCode == 703 && resultCode == RESULT_OK) {
+            val uri = data?.data ?: return
+            AlertDialog.Builder(this)
+                .setTitle("बॅकअप Restore करायचा?")
+                .setMessage("Restore केल्यास या फोनवरील सध्याची बिले आणि Document Checklist बॅकअपमधील माहितीद्वारे बदलली जातील.")
+                .setPositiveButton("Restore करा") { _, _ -> restoreBackup(uri) }
+                .setNegativeButton("रद्द", null)
+                .show()
         }
     }
 
