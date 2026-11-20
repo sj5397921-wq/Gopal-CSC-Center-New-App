@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "530152319469",
+    "project_id": "gopal-136d3",
+    "storage_bucket": "gopal-136d3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:530152319469:android:2a53ea3a16e3add6021fe4",
+        "android_client_info": {
+          "package_name": "com.gopalcsccenter.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA5BwnDZfHQ0XaVdcxWpMRGBVYmaHehRpY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
