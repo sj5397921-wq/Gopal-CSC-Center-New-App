@@ -902,10 +902,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showApplicationTracking() {
+        val isAdmin = firebaseAuth.currentUser?.email == authorizedAdminEmail
         val page = createLayout()
         addTitle(page, "अर्ज ट्रॅकिंग")
         val note = TextView(this).apply {
-            text = "अर्ज क्रमांक किंवा ग्राहकाचा मोबाईल नंबर टाकून अर्ज शोधा.\nस्थिती बदलण्यासाठी अर्जावर टॅप करा.\n\nटीप: सध्या नोंदी या फोनमध्येच सेव्ह होतात."
+            text = if (isAdmin) {
+                "अर्ज क्रमांक किंवा ग्राहकाचा मोबाईल नंबर टाकून अर्ज शोधा. अर्जावर टॅप करून स्थिती बदला.\n\nटीप: सध्या नोंदी या फोनमध्येच सेव्ह होतात."
+            } else {
+                "अर्ज क्रमांक किंवा ग्राहकाचा मोबाईल नंबर टाकून अर्ज शोधा. येथे अर्जाची स्थिती पाहता येईल. स्थिती बदलण्याचा अधिकार फक्त Admin कडे आहे."
+            }
             textSize = 14f
             setTextColor(Color.DKGRAY)
             setPadding(4, 4, 4, 12)
@@ -930,7 +935,7 @@ class MainActivity : AppCompatActivity() {
         val results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         scroll.addView(results)
         page.addView(scroll, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
-        val statuses = arrayOf("अर्ज प्राप्त", "प्रक्रिया सुरू", "अधिक कागदपत्रे आवश्यक", "मंजूर", "नामंजूर", "पूर्ण")
+        val statuses = arrayOf("अर्ज प्राप्त", "प्रक्रियेत", "पूर्ण")
         fun render() {
             results.removeAllViews()
             val records = loadBillRecords()
@@ -957,10 +962,15 @@ class MainActivity : AppCompatActivity() {
                     isClickable = true
                     isFocusable = true
                     setOnClickListener {
+                        val options = if (isAdmin) {
+                            arrayOf("अर्जाची स्थिती बदला", "अर्ज पावती PDF / WhatsApp", "जोडलेली कागदपत्रे पाहा")
+                        } else {
+                            arrayOf("अर्ज पावती PDF / WhatsApp", "जोडलेली कागदपत्रे पाहा")
+                        }
                         AlertDialog.Builder(this@MainActivity)
                             .setTitle("अर्ज पर्याय")
-                            .setItems(arrayOf("अर्जाची स्थिती बदला", "अर्ज पावती PDF / WhatsApp", "जोडलेली कागदपत्रे पाहा")) { _, choice ->
-                                if (choice == 0) {
+                            .setItems(options) { _, choice ->
+                                if (isAdmin && choice == 0) {
                                     val selected = statuses.indexOf(status).let { if (it < 0) 0 else it }
                                     AlertDialog.Builder(this@MainActivity).setTitle("अर्ज स्थिती बदला")
                                         .setSingleChoiceItems(statuses, selected) { dialog, which ->
@@ -968,10 +978,10 @@ class MainActivity : AppCompatActivity() {
                                             dialog.dismiss()
                                             render()
                                         }.setNegativeButton("रद्द", null).show()
-                                } else if (choice == 1) {
-                                    showApplicationReceipt(item)
                                 } else {
-                                    showApplicationDocuments(item)
+                                    val action = if (isAdmin) choice else choice + 1
+                                    if (action == 1) showApplicationReceipt(item)
+                                    else showApplicationDocuments(item)
                                 }
                             }.setNegativeButton("बंद", null).show()
                     }
@@ -1188,6 +1198,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateApplicationStatus(billNumber: String, status: String) {
+        if (firebaseAuth.currentUser?.email != authorizedAdminEmail) {
+            showMessage("अर्जाची स्थिती बदलण्याचा अधिकार फक्त Admin कडे आहे.")
+            return
+        }
         val prefs = getSharedPreferences("gopal_csc_records", MODE_PRIVATE)
         val records = loadBillRecords()
         for (i in 0 until records.length()) {
@@ -2044,6 +2058,7 @@ class MainActivity : AppCompatActivity() {
             "पूर्ण स्थितीत नसलेले सर्व अर्ज"
         )
 
+        addButton(page, "अर्ज व्यवस्थापन / स्थिती बदला") { showApplicationTracking() }
         addButton(page, "सेवा शुल्क व्यवस्थापन") { showAdminFeePanel() }
         addButton(page, "Dashboard पुन्हा अपडेट करा") { showAdminDashboard() }
         addButton(page, "Logout") {
