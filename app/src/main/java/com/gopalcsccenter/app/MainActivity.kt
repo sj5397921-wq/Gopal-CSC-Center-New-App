@@ -114,6 +114,7 @@ class MainActivity : AppCompatActivity() {
 
         addButton(layout, "उपलब्ध सेवा") { showServices() }
         addButton(layout, "ग्राहक / बिल इतिहास") { showBillHistory() }
+        addButton(layout, "अर्ज ट्रॅकिंग") { showApplicationTracking() }
         addButton(layout, "दैनिक उत्पन्न अहवाल") { showDailyIncomeReport() }
         addButton(layout, "Admin Panel") { showAdminInfo() }
         addButton(layout, "Document Scanner") {
@@ -241,6 +242,8 @@ class MainActivity : AppCompatActivity() {
             GOPAL CSC CENTER
             ------------------------------
             बिल क्रमांक: $billNumber
+            अर्ज क्रमांक: GAPP${billNumber.takeLast(8)}
+            अर्ज स्थिती: अर्ज प्राप्त
             दिनांक: $date
             ग्राहक: $customerName
             मोबाईल: $phone
@@ -267,6 +270,8 @@ class MainActivity : AppCompatActivity() {
         val records = try { JSONArray(prefs.getString("bills", "[]") ?: "[]") } catch (_: Exception) { JSONArray() }
         val record = JSONObject()
         record.put("billNumber", billNumber)
+        record.put("applicationNo", "GAPP" + billNumber.takeLast(8))
+        record.put("applicationStatus", "अर्ज प्राप्त")
         record.put("date", date)
         record.put("createdAt", System.currentTimeMillis())
         record.put("customerName", customerName)
@@ -397,6 +402,79 @@ class MainActivity : AppCompatActivity() {
         renderResults()
         addButton(page, "मुख्य पानावर जा") { showHome() }
         setContentView(page)
+    }
+
+    private fun showApplicationTracking() {
+        val page = createLayout()
+        addTitle(page, "अर्ज ट्रॅकिंग")
+        val note = TextView(this).apply {
+            text = "अर्ज क्रमांक किंवा ग्राहकाचा मोबाईल नंबर टाकून अर्ज शोधा.\nस्थिती बदलण्यासाठी अर्जावर टॅप करा.\n\nटीप: सध्या नोंदी या फोनमध्येच सेव्ह होतात."
+            textSize = 14f
+            setTextColor(Color.DKGRAY)
+            setPadding(4, 4, 4, 12)
+        }
+        page.addView(note)
+        val search = addField(page, "अर्ज क्रमांक / मोबाईल नंबर")
+        val scroll = ScrollView(this)
+        val results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        scroll.addView(results)
+        page.addView(scroll, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+        val statuses = arrayOf("अर्ज प्राप्त", "प्रक्रिया सुरू", "अधिक कागदपत्रे आवश्यक", "मंजूर", "नामंजूर", "पूर्ण")
+        fun render() {
+            results.removeAllViews()
+            val records = loadBillRecords()
+            val query = search.text.toString().trim()
+            var count = 0
+            for (i in records.length() - 1 downTo 0) {
+                val item = records.optJSONObject(i) ?: continue
+                val appNo = item.optString("applicationNo", "GAPP" + item.optString("billNumber").takeLast(8))
+                val phone = item.optString("phone")
+                val name = item.optString("customerName")
+                if (query.isNotEmpty() && !appNo.contains(query, true) && !phone.contains(query) && !name.contains(query, true)) continue
+                count++
+                val billNo = item.optString("billNumber")
+                val status = item.optString("applicationStatus", "अर्ज प्राप्त")
+                val row = TextView(this).apply {
+                    text = "अर्ज क्र.: " + appNo + "\nग्राहक: " + name + "\nमोबाईल: " + phone + "\nसेवा: " + item.optString("service") + "\nस्थिती: " + status
+                    textSize = 16f
+                    setTextColor(Color.BLACK)
+                    setPadding(14, 14, 14, 14)
+                    setBackgroundColor(Color.rgb(240, 245, 250))
+                    isClickable = true
+                    isFocusable = true
+                    setOnClickListener {
+                        val selected = statuses.indexOf(status).let { if (it < 0) 0 else it }
+                        AlertDialog.Builder(this@MainActivity).setTitle("अर्ज स्थिती बदला")
+                            .setSingleChoiceItems(statuses, selected) { dialog, which ->
+                                updateApplicationStatus(billNo, statuses[which])
+                                dialog.dismiss()
+                                render()
+                            }.setNegativeButton("रद्द", null).show()
+                    }
+                }
+                results.addView(row, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { setMargins(0, 5, 0, 5) })
+            }
+            if (count == 0) results.addView(TextView(this).apply { text = "अर्ज सापडला नाही."; textSize = 16f; setTextColor(Color.DKGRAY); gravity = Gravity.CENTER; setPadding(12, 24, 12, 24) })
+        }
+        search.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { render() }
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        })
+        render()
+        addButton(page, "मुख्य पानावर जा") { showHome() }
+        setContentView(page)
+    }
+
+    private fun updateApplicationStatus(billNumber: String, status: String) {
+        val prefs = getSharedPreferences("gopal_csc_records", MODE_PRIVATE)
+        val records = loadBillRecords()
+        for (i in 0 until records.length()) {
+            val item = records.optJSONObject(i) ?: continue
+            if (item.optString("billNumber") == billNumber) { item.put("applicationStatus", status); break }
+        }
+        prefs.edit().putString("bills", records.toString()).apply()
+        showMessage("अर्ज स्थिती अपडेट झाली.")
     }
 
     private fun showDailyIncomeReport() {
