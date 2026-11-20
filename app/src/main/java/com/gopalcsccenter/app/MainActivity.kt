@@ -124,6 +124,7 @@ class MainActivity : AppCompatActivity() {
         }
         layout.addView(subtitle)
 
+        addButton(layout, "Admin Login") { showAdminInfo() }
         addButton(layout, "उपलब्ध सेवा") { showServices() }
         addButton(layout, "ग्राहक / बिल इतिहास") { showBillHistory() }
         addButton(layout, "ग्राहक पेमेंट रिमाइंडर") { showPaymentReminders() }
@@ -136,11 +137,18 @@ class MainActivity : AppCompatActivity() {
         addButton(layout, "सूचना केंद्र") { showNotificationCenter() }
         addButton(layout, "Document Checklist") { showDocumentChecklist() }
         addButton(layout, "डेटा बॅकअप / Restore") { showBackupRestore() }
-        addButton(layout, "Admin Panel") { showAdminInfo() }
         addButton(layout, "Document Scanner") {
             showMessage("Document Scanner पुढील टप्प्यात जोडला जाईल.")
         }
-        setContentView(layout)
+        val homeScroll = ScrollView(this).apply {
+            isFillViewport = true
+            isVerticalScrollBarEnabled = true
+            addView(layout, ScrollView.LayoutParams(
+                ScrollView.LayoutParams.MATCH_PARENT,
+                ScrollView.LayoutParams.WRAP_CONTENT
+            ))
+        }
+        setContentView(homeScroll)
     }
 
     private fun showServices() {
