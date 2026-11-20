@@ -70,11 +70,11 @@ class MainActivity : AppCompatActivity() {
         parent.addView(title)
     }
 
-    private fun addField(parent: LinearLayout, hintText: String, inputType: Int = InputType.TYPE_CLASS_TEXT): EditText {
+    private fun addField(parent: LinearLayout, hintText: String, fieldInputType: Int = InputType.TYPE_CLASS_TEXT): EditText {
         val field = EditText(this).apply {
             hint = hintText
             textSize = 17f
-            inputType = inputType
+            inputType = fieldInputType
             setSingleLine(true)
             setPadding(14, 12, 14, 12)
         }
