@@ -1,6 +1,7 @@
 package com.gopalcsccenter.app
 
 import android.os.Bundle
+import android.provider.OpenableColumns
 import android.app.DatePickerDialog
 import android.content.Intent
 import android.graphics.Paint
@@ -40,6 +41,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var layout: LinearLayout
     private var pendingPdfFile: File? = null
     private val createPdfRequest = 701
+    private val selectedApplicationDocuments = mutableListOf<android.net.Uri>()
+    private var applicationDocumentsLabel: TextView? = null
+    private val chooseApplicationDocumentsRequest = 704
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -187,6 +191,23 @@ class MainActivity : AppCompatActivity() {
         val phone = addField(fields, "मोबाईल नंबर", InputType.TYPE_CLASS_PHONE)
         val fee = addField(fields, "सेवा शुल्क (₹)", InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL)
         val reference = addField(fields, "अर्ज / संदर्भ क्रमांक (ऐच्छिक)")
+        selectedApplicationDocuments.clear()
+        applicationDocumentsLabel = TextView(this).apply {
+            text = "अद्याप कोणतेही कागदपत्र जोडलेले नाही."
+            textSize = 14f
+            setTextColor(Color.DKGRAY)
+            setPadding(4, 6, 4, 6)
+        }
+        fields.addView(applicationDocumentsLabel)
+        addButton(fields, "कागदपत्रे निवडा (PDF / फोटो)") {
+            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "*/*"
+                putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+            }
+            @Suppress("DEPRECATION")
+            startActivityForResult(intent, chooseApplicationDocumentsRequest)
+        }
 
         val paymentLabel = TextView(this).apply {
             text = "पेमेंट स्थिती"
@@ -234,14 +255,15 @@ class MainActivity : AppCompatActivity() {
                 mobile,
                 amount,
                 reference.text.toString().trim(),
-                paymentStatus.selectedItem.toString()
+                paymentStatus.selectedItem.toString(),
+                selectedApplicationDocuments.toList()
             )
         }
         addButton(page, "मागे जा") { showServices() }
         setContentView(page)
     }
 
-    private fun showBill(service: String, customerName: String, phone: String, amount: Double, reference: String, paymentStatus: String) {
+    private fun showBill(service: String, customerName: String, phone: String, amount: Double, reference: String, paymentStatus: String, documentUris: List<android.net.Uri>) {
         val billNumber = "GCSC" + System.currentTimeMillis().toString().takeLast(8)
         val date = SimpleDateFormat("dd-MM-yyyy hh:mm a", Locale("mr", "IN")).format(Date())
         val amountText = String.format(Locale.US, "%.2f", amount)
@@ -264,7 +286,8 @@ class MainActivity : AppCompatActivity() {
             ------------------------------
             धन्यवाद!
         """.trimIndent()
-        saveBillRecord(billNumber, date, customerName, phone, service, amount, reference, paymentStatus, receipt)
+        val savedDocuments = persistApplicationDocuments(billNumber, documentUris)
+        saveBillRecord(billNumber, date, customerName, phone, service, amount, reference, paymentStatus, receipt, savedDocuments)
         val pdf = createReceiptPdf(receipt, billNumber)
         AlertDialog.Builder(this).setTitle("बिल तयार झाले").setMessage(receipt)
             .setPositiveButton("PDF डाउनलोड") { _, _ -> savePdf(pdf, billNumber) }
@@ -272,7 +295,7 @@ class MainActivity : AppCompatActivity() {
             .setNegativeButton("WhatsApp PDF शेअर") { _, _ -> sharePdf(pdf) }.show()
     }
 
-    private fun saveBillRecord(billNumber: String, date: String, customerName: String, phone: String, service: String, amount: Double, reference: String, paymentStatus: String, receipt: String) {
+    private fun saveBillRecord(billNumber: String, date: String, customerName: String, phone: String, service: String, amount: Double, reference: String, paymentStatus: String, receipt: String, documents: JSONArray) {
         val prefs = getSharedPreferences("gopal_csc_records", MODE_PRIVATE)
         val records = try { JSONArray(prefs.getString("bills", "[]") ?: "[]") } catch (_: Exception) { JSONArray() }
         val record = JSONObject()
@@ -288,6 +311,7 @@ class MainActivity : AppCompatActivity() {
         record.put("reference", reference)
         record.put("paymentStatus", paymentStatus)
         record.put("receipt", receipt)
+        record.put("documents", documents)
         records.put(record)
         prefs.edit().putString("bills", records.toString()).apply()
     }
@@ -856,7 +880,7 @@ class MainActivity : AppCompatActivity() {
                     setOnClickListener {
                         AlertDialog.Builder(this@MainActivity)
                             .setTitle("अर्ज पर्याय")
-                            .setItems(arrayOf("अर्जाची स्थिती बदला", "अर्ज पावती PDF / WhatsApp")) { _, choice ->
+                            .setItems(arrayOf("अर्जाची स्थिती बदला", "अर्ज पावती PDF / WhatsApp", "जोडलेली कागदपत्रे पाहा")) { _, choice ->
                                 if (choice == 0) {
                                     val selected = statuses.indexOf(status).let { if (it < 0) 0 else it }
                                     AlertDialog.Builder(this@MainActivity).setTitle("अर्ज स्थिती बदला")
@@ -865,8 +889,10 @@ class MainActivity : AppCompatActivity() {
                                             dialog.dismiss()
                                             render()
                                         }.setNegativeButton("रद्द", null).show()
-                                } else {
+                                } else if (choice == 1) {
                                     showApplicationReceipt(item)
+                                } else {
+                                    showApplicationDocuments(item)
                                 }
                             }.setNegativeButton("बंद", null).show()
                     }
@@ -896,6 +922,79 @@ class MainActivity : AppCompatActivity() {
         render()
         addButton(page, "मुख्य पानावर जा") { showHome() }
         setContentView(page)
+    }
+
+    private fun persistApplicationDocuments(billNumber: String, uris: List<android.net.Uri>): JSONArray {
+        val saved = JSONArray()
+        if (uris.isEmpty()) return saved
+        val folder = File(filesDir, "application_documents/$billNumber")
+        if (!folder.exists() && !folder.mkdirs()) {
+            showMessage("कागदपत्रांसाठी फोल्डर तयार झाले नाही.")
+            return saved
+        }
+        var failed = 0
+        uris.take(10).forEachIndexed { index, uri ->
+            try {
+                var displayName = "document_${index + 1}"
+                contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (cursor.moveToFirst() && nameIndex >= 0) displayName = cursor.getString(nameIndex) ?: displayName
+                }
+                val safeName = displayName.replace(Regex("[^A-Za-z0-9._-]"), "_").take(80).ifBlank { "document_${index + 1}" }
+                val destination = File(folder, "${index + 1}_$safeName")
+                contentResolver.openInputStream(uri)?.use { input ->
+                    FileOutputStream(destination).use { output ->
+                        val buffer = ByteArray(8192)
+                        var total = 0L
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count <= 0) break
+                            total += count
+                            if (total > 15L * 1024L * 1024L) throw IllegalArgumentException("फाइल 15 MB पेक्षा मोठी आहे")
+                            output.write(buffer, 0, count)
+                        }
+                    }
+                } ?: throw IllegalStateException("फाइल वाचता आली नाही")
+                saved.put(JSONObject().put("name", displayName).put("path", "application_documents/$billNumber/${destination.name}")
+                    .put("mimeType", contentResolver.getType(uri) ?: "*/*"))
+            } catch (_: Exception) {
+                failed++
+            }
+        }
+        if (uris.size > 10) failed += uris.size - 10
+        if (failed > 0) showMessage("$failed कागदपत्रे जोडता आली नाहीत. प्रत्येक फाइल 15 MB पर्यंत आणि जास्तीत जास्त 10 फाइल निवडा.")
+        return saved
+    }
+
+    private fun showApplicationDocuments(item: JSONObject) {
+        val documents = item.optJSONArray("documents") ?: JSONArray()
+        if (documents.length() == 0) {
+            showMessage("या अर्जासोबत कागदपत्रे जोडलेली नाहीत.")
+            return
+        }
+        val labels = Array(documents.length()) { index -> documents.optJSONObject(index)?.optString("name", "कागदपत्र ${index + 1}") ?: "कागदपत्र ${index + 1}" }
+        AlertDialog.Builder(this)
+            .setTitle("जोडलेली कागदपत्रे")
+            .setItems(labels) { _, which ->
+                val document = documents.optJSONObject(which) ?: return@setItems
+                val file = File(filesDir, document.optString("path"))
+                if (!file.exists()) {
+                    showMessage("कागदपत्र या फोनमध्ये उपलब्ध नाही. कदाचित अॅप डेटा बदलला किंवा Restore केला आहे.")
+                    return@setItems
+                }
+                try {
+                    val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+                    val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(uri, document.optString("mimeType", "*/*"))
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    startActivity(viewIntent)
+                } catch (_: Exception) {
+                    showMessage("ही फाइल उघडण्यासाठी योग्य अॅप उपलब्ध नाही.")
+                }
+            }
+            .setNegativeButton("बंद", null)
+            .show()
     }
 
     private fun showApplicationReceipt(item: JSONObject) {
@@ -1605,6 +1704,21 @@ class MainActivity : AppCompatActivity() {
     @Deprecated("Compatibility with minimum SDK")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == chooseApplicationDocumentsRequest && resultCode == RESULT_OK) {
+            selectedApplicationDocuments.clear()
+            val clip = data?.clipData
+            if (clip != null) {
+                for (i in 0 until minOf(clip.itemCount, 10)) selectedApplicationDocuments.add(clip.getItemAt(i).uri)
+            } else {
+                data?.data?.let { selectedApplicationDocuments.add(it) }
+            }
+            applicationDocumentsLabel?.text = if (selectedApplicationDocuments.isEmpty()) {
+                "अद्याप कोणतेही कागदपत्र जोडलेले नाही."
+            } else {
+                "निवडलेली कागदपत्रे: ${selectedApplicationDocuments.size}\n" + selectedApplicationDocuments.mapIndexed { index, uri -> "${index + 1}. ${uri.lastPathSegment?.substringAfterLast('/') ?: "फाइल"}" }.joinToString("\n")
+            }
+            if (selectedApplicationDocuments.isNotEmpty()) showMessage("${selectedApplicationDocuments.size} कागदपत्रे निवडली आहेत. बिल तयार करताना ती अर्जासोबत सेव्ह होतील.")
+        }
         if (requestCode == createPdfRequest && resultCode == RESULT_OK) {
             val source = pendingPdfFile ?: return
             val uri = data?.data ?: return
