@@ -114,6 +114,7 @@ class MainActivity : AppCompatActivity() {
 
         addButton(layout, "उपलब्ध सेवा") { showServices() }
         addButton(layout, "ग्राहक / बिल इतिहास") { showBillHistory() }
+        addButton(layout, "ग्राहक यादी / संपूर्ण इतिहास") { showCustomerDirectory() }
         addButton(layout, "अर्ज ट्रॅकिंग") { showApplicationTracking() }
         addButton(layout, "दैनिक उत्पन्न अहवाल") { showDailyIncomeReport() }
         addButton(layout, "सेवानुसार उत्पन्न अहवाल") { showServiceIncomeReport() }
@@ -290,6 +291,122 @@ class MainActivity : AppCompatActivity() {
     private fun loadBillRecords(): JSONArray {
         val raw = getSharedPreferences("gopal_csc_records", MODE_PRIVATE).getString("bills", "[]")
         return try { JSONArray(raw ?: "[]") } catch (_: Exception) { JSONArray() }
+    }
+
+    private fun showCustomerDirectory() {
+        val page = createLayout()
+        addTitle(page, "ग्राहक यादी / संपूर्ण इतिहास")
+        val search = addField(page, "ग्राहकाचे नाव किंवा मोबाईल नंबर शोधा")
+        val summary = TextView(this).apply {
+            textSize = 15f
+            setTextColor(Color.rgb(20, 80, 160))
+            setPadding(4, 8, 4, 12)
+        }
+        page.addView(summary)
+        val scroll = ScrollView(this)
+        val results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        scroll.addView(results)
+        page.addView(scroll, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+        ))
+
+        fun renderCustomers() {
+            results.removeAllViews()
+            val records = loadBillRecords()
+            val grouped = linkedMapOf<String, MutableList<JSONObject>>()
+            for (i in 0 until records.length()) {
+                val item = records.optJSONObject(i) ?: continue
+                val phone = item.optString("phone").trim()
+                if (phone.isBlank()) continue
+                grouped.getOrPut(phone) { mutableListOf() }.add(item)
+            }
+
+            val query = search.text.toString().trim()
+            val customers = grouped.entries.filter { entry ->
+                val latest = entry.value.maxByOrNull { it.optLong("createdAt", 0L) }
+                val name = latest?.optString("customerName") ?: ""
+                query.isEmpty() || name.contains(query, ignoreCase = true) || entry.key.contains(query)
+            }.sortedByDescending { entry ->
+                entry.value.maxOfOrNull { it.optLong("createdAt", 0L) } ?: 0L
+            }
+
+            val allBills = customers.sumOf { it.value.size }
+            val totalAmount = customers.sumOf { entry ->
+                entry.value.sumOf { it.optDouble("amount", 0.0) }
+            }
+            summary.text = "ग्राहक: ${customers.size}  •  बिले: $allBills\nएकूण सेवा शुल्क: ₹" +
+                String.format(Locale.US, "%.2f", totalAmount)
+
+            if (customers.isEmpty()) {
+                val empty = TextView(this).apply {
+                    text = "ग्राहक नोंदी उपलब्ध नाहीत किंवा शोध जुळत नाही."
+                    textSize = 16f
+                    setTextColor(Color.DKGRAY)
+                    gravity = Gravity.CENTER
+                    setPadding(12, 24, 12, 24)
+                }
+                results.addView(empty)
+                return
+            }
+
+            customers.forEach { entry ->
+                val phone = entry.key
+                val bills = entry.value
+                val latest = bills.maxByOrNull { it.optLong("createdAt", 0L) }!!
+                val name = latest.optString("customerName", "ग्राहक")
+                val total = bills.sumOf { it.optDouble("amount", 0.0) }
+                val received = bills.filter {
+                    val status = it.optString("paymentStatus")
+                    status == "रोख भरले" || status == "UPI भरले"
+                }.sumOf { it.optDouble("amount", 0.0) }
+                val pending = bills.filter { it.optString("paymentStatus") == "बाकी" }
+                    .sumOf { it.optDouble("amount", 0.0) }
+                val latestService = latest.optString("service")
+                val row = TextView(this).apply {
+                    text = "$name\nमोबाईल: $phone\nएकूण बिले: ${bills.size}  |  एकूण: ₹" +
+                        String.format(Locale.US, "%.2f", total) +
+                        "\nजमा: ₹" + String.format(Locale.US, "%.2f", received) +
+                        "  |  बाकी: ₹" + String.format(Locale.US, "%.2f", pending) +
+                        "\nशेवटची सेवा: $latestService\nतपशील पाहण्यासाठी येथे टॅप करा"
+                    textSize = 15f
+                    setTextColor(Color.BLACK)
+                    setPadding(14, 14, 14, 14)
+                    setBackgroundColor(Color.rgb(240, 245, 250))
+                    isClickable = true
+                    isFocusable = true
+                    setOnClickListener {
+                        val details = bills.sortedByDescending { it.optLong("createdAt", 0L) }
+                            .joinToString("\n\n") { bill ->
+                                "बिल: ${bill.optString("billNumber")}\nदिनांक: ${bill.optString("date")}" +
+                                    "\nसेवा: ${bill.optString("service")}\nरक्कम: ₹" +
+                                    String.format(Locale.US, "%.2f", bill.optDouble("amount", 0.0)) +
+                                    "\nपेमेंट: ${bill.optString("paymentStatus")}" +
+                                    "\nअर्ज क्रमांक: ${bill.optString("applicationNo")}"
+                            }
+                        AlertDialog.Builder(this@MainActivity)
+                            .setTitle("$name - ग्राहक इतिहास")
+                            .setMessage("मोबाईल: $phone\nएकूण बिले: ${bills.size}\nएकूण: ₹" +
+                                String.format(Locale.US, "%.2f", total) +
+                                "\nजमा: ₹" + String.format(Locale.US, "%.2f", received) +
+                                "\nबाकी: ₹" + String.format(Locale.US, "%.2f", pending) +
+                                "\n\n$details")
+                            .setPositiveButton("बंद", null).show()
+                    }
+                }
+                results.addView(row, LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { setMargins(0, 5, 0, 5) })
+            }
+        }
+
+        search.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { renderCustomers() }
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        })
+        renderCustomers()
+        addButton(page, "मुख्य पानावर जा") { showHome() }
+        setContentView(page)
     }
 
     private fun showBillHistory() {
