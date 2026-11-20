@@ -1,6 +1,13 @@
 package com.gopalcsccenter.app
 
 import android.os.Bundle
+import android.content.Intent
+import android.graphics.Paint
+import android.graphics.pdf.PdfDocument
+import androidx.core.content.FileProvider
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
 import android.graphics.Color
 import android.text.InputType
 import android.view.Gravity
@@ -28,6 +35,8 @@ class MainActivity : AppCompatActivity() {
     )
 
     private lateinit var layout: LinearLayout
+    private var pendingPdfFile: File? = null
+    private val createPdfRequest = 701
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -219,50 +228,84 @@ class MainActivity : AppCompatActivity() {
         setContentView(page)
     }
 
-    private fun showBill(
-        service: String,
-        customerName: String,
-        phone: String,
-        amount: Double,
-        reference: String,
-        paymentStatus: String
-    ) {
+    private fun showBill(service: String, customerName: String, phone: String, amount: Double, reference: String, paymentStatus: String) {
         val billNumber = "GCSC" + System.currentTimeMillis().toString().takeLast(8)
-        val date = SimpleDateFormat("dd-MM-yyyy  hh:mm a", Locale("mr", "IN")).format(Date())
+        val date = SimpleDateFormat("dd-MM-yyyy hh:mm a", Locale("mr", "IN")).format(Date())
         val amountText = String.format(Locale.US, "%.2f", amount)
         val receipt = """
             GOPAL CSC CENTER
             ------------------------------
             बिल क्रमांक: $billNumber
             दिनांक: $date
-
             ग्राहक: $customerName
             मोबाईल: $phone
             सेवा: $service
             संदर्भ क्रमांक: ${reference.ifBlank { "नाही" }}
-
             सेवा शुल्क: ₹$amountText
             पेमेंट स्थिती: $paymentStatus
-
             संचालक: Suresh Jadhav
+            मोबाईल: 7875277904
+            UPI: 7875277904@ybl
             ------------------------------
             धन्यवाद!
         """.trimIndent()
-
-        AlertDialog.Builder(this)
-            .setTitle("बिल तयार झाले")
-            .setMessage(receipt)
-            .setPositiveButton("ठीक आहे", null)
-            .setNeutralButton("WhatsApp शेअर") { _, _ ->
-                val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(android.content.Intent.EXTRA_TEXT, receipt)
-                }
-                startActivity(android.content.Intent.createChooser(intent, "बिल शेअर करा"))
-            }
-            .show()
+        val pdf = createReceiptPdf(receipt, billNumber)
+        AlertDialog.Builder(this).setTitle("बिल तयार झाले").setMessage(receipt)
+            .setPositiveButton("PDF डाउनलोड") { _, _ -> savePdf(pdf, billNumber) }
+            .setNeutralButton("प्रिंट") { _, _ -> openPdf(pdf) }
+            .setNegativeButton("WhatsApp PDF शेअर") { _, _ -> sharePdf(pdf) }.show()
     }
 
+    private fun createReceiptPdf(receipt: String, billNumber: String): File {
+        val document = PdfDocument()
+        val page = document.startPage(PdfDocument.PageInfo.Builder(595, 842, 1).create())
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = 16f }
+        var y = 65f
+        receipt.lines().forEach { line -> page.canvas.drawText(line, 40f, y, paint); y += 30f }
+        document.finishPage(page)
+        val file = File(cacheDir, "Gopal-CSC-$billNumber.pdf")
+        FileOutputStream(file).use { document.writeTo(it) }
+        document.close()
+        return file
+    }
+
+    private fun savePdf(file: File, billNumber: String) {
+        pendingPdfFile = file
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE); type = "application/pdf"
+            putExtra(Intent.EXTRA_TITLE, "Gopal-CSC-$billNumber.pdf")
+        }
+        @Suppress("DEPRECATION")
+        startActivityForResult(intent, createPdfRequest)
+    }
+
+    @Deprecated("Compatibility with minimum SDK")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == createPdfRequest && resultCode == RESULT_OK) {
+            val source = pendingPdfFile ?: return
+            val uri = data?.data ?: return
+            contentResolver.openOutputStream(uri)?.use { out -> FileInputStream(source).use { it.copyTo(out) } }
+            showMessage("बिल PDF सेव्ह झाले.")
+        }
+    }
+
+    private fun sharePdf(file: File) {
+        val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "application/pdf"; putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        startActivity(Intent.createChooser(intent, "PDF बिल शेअर करा"))
+    }
+
+    private fun openPdf(file: File) {
+        val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/pdf"); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        try { startActivity(intent) } catch (e: Exception) { showMessage("PDF viewer उपलब्ध नाही. WhatsApp शेअर वापरा.") }
+    }
     private fun showAdminInfo() {
         AlertDialog.Builder(this)
             .setTitle("Admin Login")
