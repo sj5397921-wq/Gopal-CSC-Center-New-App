@@ -116,6 +116,7 @@ class MainActivity : AppCompatActivity() {
         addButton(layout, "ग्राहक / बिल इतिहास") { showBillHistory() }
         addButton(layout, "अर्ज ट्रॅकिंग") { showApplicationTracking() }
         addButton(layout, "दैनिक उत्पन्न अहवाल") { showDailyIncomeReport() }
+        addButton(layout, "सेवानुसार उत्पन्न अहवाल") { showServiceIncomeReport() }
         addButton(layout, "Document Checklist") { showDocumentChecklist() }
         addButton(layout, "Admin Panel") { showAdminInfo() }
         addButton(layout, "Document Scanner") {
@@ -197,8 +198,7 @@ class MainActivity : AppCompatActivity() {
 
         scroll.addView(fields)
         page.addView(
-            scroll,
-            LinearLayout.LayoutParams(
+            scroll,            LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
             )
         )
@@ -397,8 +397,7 @@ class MainActivity : AppCompatActivity() {
         search.addTextChangedListener(object : android.text.TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { renderResults() }
-            override fun afterTextChanged(s: android.text.Editable?) {}
-        })
+            override fun afterTextChanged(s: android.text.Editable?) {}        })
 
         renderResults()
         addButton(page, "मुख्य पानावर जा") { showHome() }
@@ -597,8 +596,7 @@ class MainActivity : AppCompatActivity() {
         addRow.addView(newDocument, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         val addDocument = Button(this).apply {
             text = "Add"
-            isAllCaps = false
-        }
+            isAllCaps = false        }
         addRow.addView(addDocument)
         page.addView(addRow)
 
@@ -758,6 +756,60 @@ class MainActivity : AppCompatActivity() {
         val report = "आजची बिले: " + totalBills + "\nपेमेंट मिळाले: " + paidBills + "\nपेमेंट बाकी: " + pendingBills + "\n\nजमा उत्पन्न: Rs." + String.format(Locale.US, "%.2f", received) + "\nबाकी रक्कम: Rs." + String.format(Locale.US, "%.2f", pending) + "\nएकूण बिल रक्कम: Rs." + String.format(Locale.US, "%.2f", received + pending)
         AlertDialog.Builder(this).setTitle("दैनिक उत्पन्न अहवाल").setMessage(report).setPositiveButton("ठीक आहे", null).show()
     }
+    private fun showServiceIncomeReport() {
+        val records = loadBillRecords()
+        val totals = linkedMapOf<String, DoubleArray>()
+        var allBills = 0
+        var allReceived = 0.0
+        var allPending = 0.0
+
+        for (i in 0 until records.length()) {
+            val item = records.optJSONObject(i) ?: continue
+            val service = item.optString("service", "इतर सेवा")
+            val amount = item.optDouble("amount", 0.0)
+            val status = item.optString("paymentStatus")
+            val values = totals.getOrPut(service) { doubleArrayOf(0.0, 0.0, 0.0) }
+            values[0] += 1.0
+            allBills++
+            if (status == "रोख भरले" || status == "UPI भरले") {
+                values[1] += amount
+                allReceived += amount
+            } else {
+                values[2] += amount
+                allPending += amount
+            }
+        }
+
+        val report = StringBuilder()
+        report.append("एकूण बिले: ").append(allBills).append("\n")
+        report.append("एकूण जमा: ₹").append(String.format(Locale.US, "%.2f", allReceived)).append("\n")
+        report.append("एकूण बाकी: ₹").append(String.format(Locale.US, "%.2f", allPending)).append("\n")
+        report.append("एकूण रक्कम: ₹").append(String.format(Locale.US, "%.2f", allReceived + allPending))
+        report.append("\n\nसेवानुसार तपशील\n------------------------------")
+        val orderedServices = services.filter { totals.containsKey(it) } + totals.keys.filter { it !in services }
+        orderedServices.forEach { service ->
+            val values = totals[service] ?: return@forEach
+            report.append("\n\n").append(service)
+            report.append("\nबिले: ").append(values[0].toInt())
+            report.append("\nजमा: ₹").append(String.format(Locale.US, "%.2f", values[1]))
+            report.append("\nबाकी: ₹").append(String.format(Locale.US, "%.2f", values[2]))
+        }
+        if (allBills == 0) report.append("\n\nअद्याप कोणतेही बिल तयार झालेले नाही.")
+
+        val content = TextView(this).apply {
+            text = report.toString()
+            textSize = 16f
+            setTextColor(Color.BLACK)
+            setPadding(28, 16, 28, 16)
+        }
+        val scroll = ScrollView(this).apply { addView(content) }
+        AlertDialog.Builder(this)
+            .setTitle("सेवानुसार उत्पन्न अहवाल")
+            .setView(scroll)
+            .setPositiveButton("ठीक आहे", null)
+            .show()
+    }
+
     private fun createReceiptPdf(receipt: String, billNumber: String): File {
         val document = PdfDocument()
         val page = document.startPage(PdfDocument.PageInfo.Builder(595, 842, 1).create())
