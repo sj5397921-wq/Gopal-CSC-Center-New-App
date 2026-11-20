@@ -415,6 +415,20 @@ class MainActivity : AppCompatActivity() {
         }
         page.addView(note)
         val search = addField(page, "अर्ज क्रमांक / मोबाईल नंबर")
+        var selectedDate = ""
+        val dateLabel = TextView(this).apply {
+            text = "निवडलेली तारीख: सर्व दिवस"
+            textSize = 15f
+            setTextColor(Color.DKGRAY)
+            setPadding(4, 6, 4, 6)
+        }
+        page.addView(dateLabel)
+        val dateButtons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
+        val chooseDate = Button(this).apply { text = "तारीख निवडा"; isAllCaps = false }
+        val clearDate = Button(this).apply { text = "तारीख काढा"; isAllCaps = false }
+        dateButtons.addView(chooseDate, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        dateButtons.addView(clearDate, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        page.addView(dateButtons)
         val scroll = ScrollView(this)
         val results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         scroll.addView(results)
@@ -430,7 +444,10 @@ class MainActivity : AppCompatActivity() {
                 val appNo = item.optString("applicationNo", "GAPP" + item.optString("billNumber").takeLast(8))
                 val phone = item.optString("phone")
                 val name = item.optString("customerName")
-                if (query.isNotEmpty() && !appNo.contains(query, true) && !phone.contains(query) && !name.contains(query, true)) continue
+                val matchesQuery = query.isEmpty() || appNo.contains(query, true) || phone.contains(query) || name.contains(query, true)
+                val matchesDate = selectedDate.isEmpty() || SimpleDateFormat("yyyyMMdd", Locale.US)
+                    .format(Date(item.optLong("createdAt", 0L))) == selectedDate
+                if (!matchesQuery || !matchesDate) continue
                 count++
                 val billNo = item.optString("billNumber")
                 val status = item.optString("applicationStatus", "अर्ज प्राप्त")
@@ -463,7 +480,20 @@ class MainActivity : AppCompatActivity() {
                 results.addView(row, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { setMargins(0, 5, 0, 5) })
             }
             if (count == 0) results.addView(TextView(this).apply { text = "अर्ज सापडला नाही."; textSize = 16f; setTextColor(Color.DKGRAY); gravity = Gravity.CENTER; setPadding(12, 24, 12, 24) })
+            dateLabel.text = if (selectedDate.isEmpty()) "निवडलेली तारीख: सर्व दिवस" else
+                "निवडलेली तारीख: " + SimpleDateFormat("dd-MM-yyyy", Locale.US)
+                    .format(SimpleDateFormat("yyyyMMdd", Locale.US).parse(selectedDate)!!)
         }
+        chooseDate.setOnClickListener {
+            val calendar = java.util.Calendar.getInstance()
+            DatePickerDialog(this, { _, year, month, day ->
+                val chosen = java.util.Calendar.getInstance().apply { set(year, month, day, 12, 0, 0) }
+                selectedDate = SimpleDateFormat("yyyyMMdd", Locale.US).format(chosen.time)
+                render()
+            }, calendar.get(java.util.Calendar.YEAR), calendar.get(java.util.Calendar.MONTH),
+                calendar.get(java.util.Calendar.DAY_OF_MONTH)).show()
+        }
+        clearDate.setOnClickListener { selectedDate = ""; render() }
         search.addTextChangedListener(object : android.text.TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { render() }
@@ -508,8 +538,13 @@ class MainActivity : AppCompatActivity() {
         val pdf = createReceiptPdf(receipt, "Application-$safeName")
         AlertDialog.Builder(this).setTitle("अर्ज पावती")
             .setMessage(receipt)
-            .setPositiveButton("PDF डाउनलोड") { _, _ -> savePdf(pdf, "Arj-Pavati-$safeName") }
-            .setNeutralButton("WhatsApp शेअर") { _, _ -> sharePdf(pdf) }
+            .setItems(arrayOf("PDF डाउनलोड", "प्रिंट", "WhatsApp शेअर")) { _, choice ->
+                when (choice) {
+                    0 -> savePdf(pdf, "Arj-Pavati-$safeName")
+                    1 -> openPdf(pdf)
+                    2 -> sharePdf(pdf)
+                }
+            }
             .setNegativeButton("बंद", null).show()
     }
 
