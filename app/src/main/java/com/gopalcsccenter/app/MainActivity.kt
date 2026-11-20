@@ -173,6 +173,31 @@ class MainActivity : AppCompatActivity() {
         setContentView(page)
     }
 
+    private fun getRequiredDocumentsForService(service: String): List<String> {
+        val defaults = mapOf(
+            "आधार कार्ड सेवा" to listOf("आधार कार्ड (असल्यास)", "जन्म प्रमाणपत्र (बाल आधारसाठी)", "मोबाईल नंबर", "पत्ता / ओळख पुरावा (सेवेनुसार)"),
+            "पॅन कार्ड सेवा" to listOf("आधार कार्ड", "मोबाईल नंबर", "ई-मेल आयडी", "फोटो व स्वाक्षरी (लागू असल्यास)"),
+            "MahaDBT अर्ज" to listOf("आधार कार्ड", "बँक पासबुक", "7/12 उतारा (लागू असल्यास)", "8-A उतारा (लागू असल्यास)", "Farmer ID / जात प्रमाणपत्र (योजनेनुसार)"),
+            "जात प्रमाणपत्र" to listOf("आधार कार्ड", "रहिवासी / पत्ता पुरावा", "शाळा सोडल्याचा दाखला (लागू असल्यास)", "वडिलांचे / नातेवाईकांचे जात प्रमाणपत्र (लागू असल्यास)", "पासपोर्ट फोटो"),
+            "उत्पन्न प्रमाणपत्र" to listOf("आधार कार्ड", "रहिवासी पुरावा", "उत्पन्नाचा पुरावा", "रेशन कार्ड (लागू असल्यास)", "पासपोर्ट फोटो"),
+            "रहिवासी प्रमाणपत्र" to listOf("आधार कार्ड", "पत्ता पुरावा", "रेशन कार्ड / वीज बिल (लागू असल्यास)", "पासपोर्ट फोटो"),
+            "रेल्वे तिकीट बुकिंग" to listOf("प्रवाशाचे पूर्ण नाव", "प्रवाशाचे वय", "प्रवासाची तारीख", "प्रवासाचे ठिकाण व वेळ", "मोबाईल नंबर"),
+            "बस तिकीट बुकिंग" to listOf("प्रवाशाचे पूर्ण नाव", "प्रवासाची तारीख", "प्रवासाचे ठिकाण", "मोबाईल नंबर"),
+            "विमान तिकीट बुकिंग" to listOf("ओळखपत्रानुसार पूर्ण नाव", "प्रवासाची तारीख", "प्रस्थान व गंतव्य ठिकाण", "मोबाईल नंबर", "ई-मेल आयडी"),
+            "ऑनलाइन फॉर्म" to listOf("आधार कार्ड (लागू असल्यास)", "मोबाईल नंबर", "ई-मेल आयडी", "संबंधित अर्जासाठी आवश्यक कागदपत्रे"),
+            "प्रिंट आणि झेरॉक्स" to listOf("मूळ कागदपत्रे किंवा स्पष्ट PDF / फोटो", "प्रिंटसाठी आवश्यक पानांची माहिती")
+        )
+        val prefs = getSharedPreferences("gopal_csc_checklists", MODE_PRIVATE)
+        val key = "documents_" + service.hashCode()
+        val saved = prefs.getString(key, null) ?: return defaults[service] ?: listOf("संबंधित सेवेसाठी आवश्यक कागदपत्रे")
+        return try {
+            val array = JSONArray(saved)
+            List(array.length()) { index -> array.optString(index) }.filter { it.isNotBlank() }
+        } catch (_: Exception) {
+            defaults[service] ?: listOf("संबंधित सेवेसाठी आवश्यक कागदपत्रे")
+        }
+    }
+
     private fun showCustomerForm(service: String) {
         val page = createLayout()
         addTitle(page, "ग्राहक माहिती")
@@ -191,6 +216,39 @@ class MainActivity : AppCompatActivity() {
         val phone = addField(fields, "मोबाईल नंबर", InputType.TYPE_CLASS_PHONE)
         val fee = addField(fields, "सेवा शुल्क (₹)", InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL)
         val reference = addField(fields, "अर्ज / संदर्भ क्रमांक (ऐच्छिक)")
+
+        val requiredDocuments = getRequiredDocumentsForService(service)
+        val requiredHeading = TextView(this).apply {
+            text = "या सेवेसाठी आवश्यक कागदपत्रे"
+            textSize = 17f
+            setTextColor(Color.rgb(20, 80, 160))
+            setPadding(4, 14, 4, 4)
+        }
+        fields.addView(requiredHeading)
+        if (requiredDocuments.isEmpty()) {
+            fields.addView(TextView(this).apply {
+                text = "या सेवेसाठी आवश्यक कागदपत्रांची यादी Admin ने अद्याप दिलेली नाही."
+                textSize = 14f
+                setTextColor(Color.DKGRAY)
+                setPadding(8, 6, 8, 10)
+            })
+        } else {
+            requiredDocuments.forEachIndexed { index, document ->
+                fields.addView(TextView(this).apply {
+                    text = "• $document"
+                    textSize = 15f
+                    setTextColor(Color.DKGRAY)
+                    setPadding(8, 5, 8, 5)
+                })
+            }
+        }
+        fields.addView(TextView(this).apply {
+            text = "वरील कागदपत्रांची यादी Admin मधील Document Checklist मधून बदलता येते. आवश्यक फाइल्स खाली जोडा."
+            textSize = 12f
+            setTextColor(Color.GRAY)
+            setPadding(8, 2, 8, 8)
+        })
+
         selectedApplicationDocuments.clear()
         applicationDocumentsContainer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
