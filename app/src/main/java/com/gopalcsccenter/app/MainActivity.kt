@@ -2,11 +2,14 @@ package com.gopalcsccenter.app
 
 import android.os.Bundle
 import android.graphics.Color
+import android.text.InputType
 import android.view.Gravity
-import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AlertDialog
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
@@ -40,26 +43,19 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun addButton(
-        parent: LinearLayout,
-        text: String,
-        action: () -> Unit
-    ) {
+    private fun addButton(parent: LinearLayout, text: String, action: () -> Unit) {
         val button = Button(this).apply {
             this.text = text
             textSize = 16f
             isAllCaps = false
             setOnClickListener { action() }
         }
-
         parent.addView(
             button,
             LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                setMargins(0, 10, 0, 10)
-            }
+            ).apply { setMargins(0, 10, 0, 10) }
         )
     }
 
@@ -74,6 +70,24 @@ class MainActivity : AppCompatActivity() {
         parent.addView(title)
     }
 
+    private fun addField(parent: LinearLayout, hintText: String, inputType: Int = InputType.TYPE_CLASS_TEXT): EditText {
+        val field = EditText(this).apply {
+            hint = hintText
+            textSize = 17f
+            inputType = inputType
+            setSingleLine(true)
+            setPadding(14, 12, 14, 12)
+        }
+        parent.addView(
+            field,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(0, 6, 0, 6) }
+        )
+        return field
+    }
+
     private fun showHome() {
         layout = createLayout()
         addTitle(layout, "GOPAL CSC CENTER")
@@ -86,18 +100,11 @@ class MainActivity : AppCompatActivity() {
         }
         layout.addView(subtitle)
 
-        addButton(layout, "उपलब्ध सेवा") {
-            showServices()
-        }
-
-        addButton(layout, "Admin Panel") {
-            showAdminInfo()
-        }
-
+        addButton(layout, "उपलब्ध सेवा") { showServices() }
+        addButton(layout, "Admin Panel") { showAdminInfo() }
         addButton(layout, "Document Scanner") {
             showMessage("Document Scanner पुढील टप्प्यात जोडला जाईल.")
         }
-
         setContentView(layout)
     }
 
@@ -106,9 +113,7 @@ class MainActivity : AppCompatActivity() {
         addTitle(page, "उपलब्ध सेवा")
 
         val scroll = ScrollView(this)
-        val list = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-        }
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
 
         services.forEachIndexed { index, service ->
             val item = TextView(this).apply {
@@ -119,23 +124,14 @@ class MainActivity : AppCompatActivity() {
                 setBackgroundColor(Color.rgb(240, 245, 250))
                 isClickable = true
                 isFocusable = true
-                setOnClickListener {
-                    AlertDialog.Builder(this@MainActivity)
-                        .setTitle(service)
-                        .setMessage("तुम्ही ही सेवा निवडली आहे.")
-                        .setPositiveButton("ठीक आहे", null)
-                        .show()
-                }
+                setOnClickListener { showCustomerForm(service) }
             }
-
             list.addView(
                 item,
                 LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply {
-                    setMargins(0, 5, 0, 5)
-                }
+                ).apply { setMargins(0, 5, 0, 5) }
             )
         }
 
@@ -143,17 +139,128 @@ class MainActivity : AppCompatActivity() {
         page.addView(
             scroll,
             LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                0,
-                1f
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+            )
+        )
+        addButton(page, "मुख्य पानावर जा") { showHome() }
+        setContentView(page)
+    }
+
+    private fun showCustomerForm(service: String) {
+        val page = createLayout()
+        addTitle(page, "ग्राहक माहिती")
+
+        val selected = TextView(this).apply {
+            text = "निवडलेली सेवा: $service"
+            textSize = 18f
+            setTextColor(Color.rgb(20, 80, 160))
+            setPadding(0, 8, 0, 12)
+        }
+        page.addView(selected)
+
+        val scroll = ScrollView(this)
+        val fields = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val customerName = addField(fields, "ग्राहकाचे पूर्ण नाव")
+        val phone = addField(fields, "मोबाईल नंबर", InputType.TYPE_CLASS_PHONE)
+        val fee = addField(fields, "सेवा शुल्क (₹)", InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL)
+        val reference = addField(fields, "अर्ज / संदर्भ क्रमांक (ऐच्छिक)")
+
+        val paymentLabel = TextView(this).apply {
+            text = "पेमेंट स्थिती"
+            textSize = 16f
+            setTextColor(Color.DKGRAY)
+            setPadding(0, 12, 0, 4)
+        }
+        fields.addView(paymentLabel)
+        val paymentStatus = Spinner(this)
+        val statuses = listOf("बाकी", "रोख भरले", "UPI भरले")
+        paymentStatus.adapter = ArrayAdapter(
+            this, android.R.layout.simple_spinner_dropdown_item, statuses
+        )
+        fields.addView(paymentStatus)
+
+        scroll.addView(fields)
+        page.addView(
+            scroll,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
             )
         )
 
-        addButton(page, "मुख्य पानावर जा") {
-            showHome()
-        }
+        addButton(page, "बिल तयार करा") {
+            val name = customerName.text.toString().trim()
+            val mobile = phone.text.toString().trim()
+            val amountText = fee.text.toString().trim()
+            val amount = amountText.toDoubleOrNull()
 
+            if (name.isEmpty()) {
+                customerName.error = "ग्राहकाचे नाव भरा"
+                return@addButton
+            }
+            if (!mobile.matches(Regex("[0-9]{10}"))) {
+                phone.error = "10 अंकी मोबाईल नंबर भरा"
+                return@addButton
+            }
+            if (amount == null || amount < 0) {
+                fee.error = "योग्य सेवा शुल्क भरा"
+                return@addButton
+            }
+
+            showBill(
+                service,
+                name,
+                mobile,
+                amount,
+                reference.text.toString().trim(),
+                paymentStatus.selectedItem.toString()
+            )
+        }
+        addButton(page, "मागे जा") { showServices() }
         setContentView(page)
+    }
+
+    private fun showBill(
+        service: String,
+        customerName: String,
+        phone: String,
+        amount: Double,
+        reference: String,
+        paymentStatus: String
+    ) {
+        val billNumber = "GCSC" + System.currentTimeMillis().toString().takeLast(8)
+        val date = SimpleDateFormat("dd-MM-yyyy  hh:mm a", Locale("mr", "IN")).format(Date())
+        val amountText = String.format(Locale.US, "%.2f", amount)
+        val receipt = """
+            GOPAL CSC CENTER
+            ------------------------------
+            बिल क्रमांक: $billNumber
+            दिनांक: $date
+
+            ग्राहक: $customerName
+            मोबाईल: $phone
+            सेवा: $service
+            संदर्भ क्रमांक: ${reference.ifBlank { "नाही" }}
+
+            सेवा शुल्क: ₹$amountText
+            पेमेंट स्थिती: $paymentStatus
+
+            संचालक: Suresh Jadhav
+            ------------------------------
+            धन्यवाद!
+        """.trimIndent()
+
+        AlertDialog.Builder(this)
+            .setTitle("बिल तयार झाले")
+            .setMessage(receipt)
+            .setPositiveButton("ठीक आहे", null)
+            .setNeutralButton("WhatsApp शेअर") { _, _ ->
+                val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(android.content.Intent.EXTRA_TEXT, receipt)
+                }
+                startActivity(android.content.Intent.createChooser(intent, "बिल शेअर करा"))
+            }
+            .show()
     }
 
     private fun showAdminInfo() {
