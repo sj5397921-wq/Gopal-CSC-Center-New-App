@@ -474,7 +474,34 @@ class MainActivity : AppCompatActivity() {
                     isFocusable = true
                     setOnClickListener {
                         AlertDialog.Builder(this@MainActivity).setTitle("बिल तपशील")
-                            .setMessage(receipt).setPositiveButton("बंद", null).show()
+                            .setMessage(receipt)
+                            .setPositiveButton("पेमेंट स्थिती बदला") { _, _ ->
+                                val choices = arrayOf("बाकी", "रोख भरले", "UPI भरले")
+                                AlertDialog.Builder(this@MainActivity)
+                                    .setTitle("नवीन पेमेंट स्थिती निवडा")
+                                    .setItems(choices) { _, which ->
+                                        val recordsToUpdate = loadBillRecords()
+                                        for (recordIndex in 0 until recordsToUpdate.length()) {
+                                            val record = recordsToUpdate.optJSONObject(recordIndex) ?: continue
+                                            if (record.optString("billNumber") == item.optString("billNumber")) {
+                                                val oldStatus = record.optString("paymentStatus")
+                                                val newStatus = choices[which]
+                                                record.put("paymentStatus", newStatus)
+                                                val oldReceipt = record.optString("receipt")
+                                                record.put("receipt", oldReceipt.replace(
+                                                    "पेमेंट स्थिती: $oldStatus",
+                                                    "पेमेंट स्थिती: $newStatus"
+                                                ))
+                                                break
+                                            }
+                                        }
+                                        getSharedPreferences("gopal_csc_records", MODE_PRIVATE)
+                                            .edit().putString("bills", recordsToUpdate.toString()).apply()
+                                        showMessage("पेमेंट स्थिती अपडेट झाली.")
+                                        renderResults()
+                                    }.setNegativeButton("रद्द", null).show()
+                            }
+                            .setNegativeButton("बंद", null).show()
                     }
                 }
                 results.addView(row, LinearLayout.LayoutParams(
