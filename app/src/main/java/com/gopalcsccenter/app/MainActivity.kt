@@ -17,6 +17,8 @@ import androidx.appcompat.app.AlertDialog
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import org.json.JSONArray
+import org.json.JSONObject
 
 class MainActivity : AppCompatActivity() {
 
@@ -110,6 +112,8 @@ class MainActivity : AppCompatActivity() {
         layout.addView(subtitle)
 
         addButton(layout, "उपलब्ध सेवा") { showServices() }
+        addButton(layout, "ग्राहक / बिल इतिहास") { showBillHistory() }
+        addButton(layout, "दैनिक उत्पन्न अहवाल") { showDailyIncomeReport() }
         addButton(layout, "Admin Panel") { showAdminInfo() }
         addButton(layout, "Document Scanner") {
             showMessage("Document Scanner पुढील टप्प्यात जोडला जाईल.")
@@ -249,6 +253,7 @@ class MainActivity : AppCompatActivity() {
             ------------------------------
             धन्यवाद!
         """.trimIndent()
+        saveBillRecord(billNumber, date, customerName, phone, service, amount, reference, paymentStatus, receipt)
         val pdf = createReceiptPdf(receipt, billNumber)
         AlertDialog.Builder(this).setTitle("बिल तयार झाले").setMessage(receipt)
             .setPositiveButton("PDF डाउनलोड") { _, _ -> savePdf(pdf, billNumber) }
@@ -256,6 +261,65 @@ class MainActivity : AppCompatActivity() {
             .setNegativeButton("WhatsApp PDF शेअर") { _, _ -> sharePdf(pdf) }.show()
     }
 
+    private fun saveBillRecord(billNumber: String, date: String, customerName: String, phone: String, service: String, amount: Double, reference: String, paymentStatus: String, receipt: String) {
+        val prefs = getSharedPreferences("gopal_csc_records", MODE_PRIVATE)
+        val records = try { JSONArray(prefs.getString("bills", "[]") ?: "[]") } catch (_: Exception) { JSONArray() }
+        val record = JSONObject()
+        record.put("billNumber", billNumber)
+        record.put("date", date)
+        record.put("createdAt", System.currentTimeMillis())
+        record.put("customerName", customerName)
+        record.put("phone", phone)
+        record.put("service", service)
+        record.put("amount", amount)
+        record.put("reference", reference)
+        record.put("paymentStatus", paymentStatus)
+        record.put("receipt", receipt)
+        records.put(record)
+        prefs.edit().putString("bills", records.toString()).apply()
+    }
+
+    private fun loadBillRecords(): JSONArray {
+        val raw = getSharedPreferences("gopal_csc_records", MODE_PRIVATE).getString("bills", "[]")
+        return try { JSONArray(raw ?: "[]") } catch (_: Exception) { JSONArray() }
+    }
+
+    private fun showBillHistory() {
+        val records = loadBillRecords()
+        if (records.length() == 0) { showMessage("अजून कोणतेही बिल जतन झालेले नाही."); return }
+        val labels = ArrayList<String>()
+        val receipts = ArrayList<String>()
+        for (i in records.length() - 1 downTo 0) {
+            val item = records.optJSONObject(i) ?: continue
+            labels.add(item.optString("billNumber") + " | " + item.optString("customerName") + " | Rs." + item.optString("amount") + " | " + item.optString("date"))
+            receipts.add(item.optString("receipt"))
+        }
+        AlertDialog.Builder(this).setTitle("ग्राहक / बिल इतिहास (" + labels.size + ")")
+            .setItems(labels.toTypedArray()) { _, which ->
+                AlertDialog.Builder(this).setTitle("बिल तपशील").setMessage(receipts[which]).setPositiveButton("बंद", null).show()
+            }.setNegativeButton("बंद", null).show()
+    }
+
+    private fun showDailyIncomeReport() {
+        val records = loadBillRecords()
+        val today = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
+        var totalBills = 0
+        var paidBills = 0
+        var pendingBills = 0
+        var received = 0.0
+        var pending = 0.0
+        for (i in 0 until records.length()) {
+            val item = records.optJSONObject(i) ?: continue
+            if (SimpleDateFormat("yyyyMMdd", Locale.US).format(Date(item.optLong("createdAt", 0L))) != today) continue
+            totalBills++
+            val amount = item.optDouble("amount", 0.0)
+            val status = item.optString("paymentStatus")
+            if (status == "रोख भरले" || status == "UPI भरले") { paidBills++; received += amount }
+            else { pendingBills++; pending += amount }
+        }
+        val report = "आजची बिले: " + totalBills + "\nपेमेंट मिळाले: " + paidBills + "\nपेमेंट बाकी: " + pendingBills + "\n\nजमा उत्पन्न: Rs." + String.format(Locale.US, "%.2f", received) + "\nबाकी रक्कम: Rs." + String.format(Locale.US, "%.2f", pending) + "\nएकूण बिल रक्कम: Rs." + String.format(Locale.US, "%.2f", received + pending)
+        AlertDialog.Builder(this).setTitle("दैनिक उत्पन्न अहवाल").setMessage(report).setPositiveButton("ठीक आहे", null).show()
+    }
     private fun createReceiptPdf(receipt: String, billNumber: String): File {
         val document = PdfDocument()
         val page = document.startPage(PdfDocument.PageInfo.Builder(595, 842, 1).create())
