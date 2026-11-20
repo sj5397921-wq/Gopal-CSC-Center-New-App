@@ -589,7 +589,7 @@ class MainActivity : AppCompatActivity() {
             gravity = Gravity.CENTER_VERTICAL
         }
         val newDocument = EditText(this).apply {
-            hint = "नवीन कागदपत्राचे नाव"
+            setHint("नवीन कागदपत्राचे नाव")
             textSize = 16f
             setSingleLine(true)
             setPadding(10, 8, 10, 8)
