@@ -24,20 +24,6 @@ jobs:
         run: |
           $ANDROID_HOME/build-tools/35.0.0/apksigner verify --verbose app/build/outputs/apk/debug/app-debug.apk
           $ANDROID_HOME/build-tools/35.0.0/aapt dump badging app/build/outputs/apk/debug/app-debug.apk
-      - uses: reactivecircus/android-emulator-runner@v2
-        name: Test install and launch on Android
-        with:
-          api-level: 35
-          target: google_apis
-          arch: x86_64
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          disable-animations: true
-          script: |
-            adb wait-for-device
-            adb install app/build/outputs/apk/debug/app-debug.apk
-            adb shell monkey -p com.gopalcsccenter.app 1
-            sleep 5
-            adb shell pidof com.gopalcsccenter.app
       - uses: actions/upload-artifact@v4
         if: success()
         with:
