@@ -118,6 +118,7 @@ class MainActivity : AppCompatActivity() {
         addButton(layout, "अर्ज ट्रॅकिंग") { showApplicationTracking() }
         addButton(layout, "दैनिक उत्पन्न अहवाल") { showDailyIncomeReport() }
         addButton(layout, "सेवानुसार उत्पन्न अहवाल") { showServiceIncomeReport() }
+        addButton(layout, "खर्च नोंदणी / खर्च अहवाल") { showExpenseManager() }
         addButton(layout, "Document Checklist") { showDocumentChecklist() }
         addButton(layout, "डेटा बॅकअप / Restore") { showBackupRestore() }
         addButton(layout, "Admin Panel") { showAdminInfo() }
@@ -943,6 +944,138 @@ class MainActivity : AppCompatActivity() {
         }
 
         addButton(page, "मुख्य पानावर जा") { showHome() }
+        setContentView(page)
+    }
+
+
+    private fun loadExpenseRecords(): JSONArray {
+        val prefs = getSharedPreferences("gopal_csc_expenses", MODE_PRIVATE)
+        return try { JSONArray(prefs.getString("expenses", "[]") ?: "[]") } catch (_: Exception) { JSONArray() }
+    }
+
+    private fun saveExpenseRecords(records: JSONArray) {
+        getSharedPreferences("gopal_csc_expenses", MODE_PRIVATE).edit()
+            .putString("expenses", records.toString()).apply()
+    }
+
+    private fun showExpenseManager() {
+        val page = createLayout()
+        addTitle(page, "खर्च नोंदणी / खर्च अहवाल")
+        val records = loadExpenseRecords()
+        val total = (0 until records.length()).sumOf { records.optJSONObject(it)?.optDouble("amount", 0.0) ?: 0.0 }
+        val summary = TextView(this).apply {
+            text = "एकूण नोंदवलेला खर्च: ₹" + String.format(Locale.US, "%.2f", total)
+            textSize = 19f
+            setTextColor(Color.rgb(20, 110, 60))
+            gravity = Gravity.CENTER
+            setPadding(8, 14, 8, 18)
+        }
+        page.addView(summary)
+
+        val scroll = ScrollView(this)
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        scroll.addView(list)
+        page.addView(scroll, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+        ))
+
+        fun render() {
+            list.removeAllViews()
+            val current = loadExpenseRecords()
+            val sum = (0 until current.length()).sumOf { current.optJSONObject(it)?.optDouble("amount", 0.0) ?: 0.0 }
+            summary.text = "एकूण नोंदवलेला खर्च: ₹" + String.format(Locale.US, "%.2f", sum)
+            if (current.length() == 0) {
+                val empty = TextView(this).apply {
+                    text = "अद्याप खर्चाची नोंद नाही."
+                    textSize = 16f
+                    setTextColor(Color.DKGRAY)
+                    gravity = Gravity.CENTER
+                    setPadding(10, 24, 10, 24)
+                }
+                list.addView(empty)
+            }
+            for (i in current.length() - 1 downTo 0) {
+                val item = current.optJSONObject(i) ?: continue
+                val amount = item.optDouble("amount", 0.0)
+                val row = TextView(this).apply {
+                    text = item.optString("category") + "  •  ₹" + String.format(Locale.US, "%.2f", amount) +
+                        "\nदिनांक: " + item.optString("date") +
+                        (if (item.optString("note").isNotBlank()) "\nतपशील: " + item.optString("note") else "") +
+                        "\nDelete करण्यासाठी येथे टॅप करा"
+                    textSize = 15f
+                    setTextColor(Color.BLACK)
+                    setPadding(14, 14, 14, 14)
+                    setBackgroundColor(Color.rgb(240, 245, 250))
+                    isClickable = true
+                    setOnClickListener {
+                        AlertDialog.Builder(this@MainActivity)
+                            .setTitle("खर्च नोंद Delete करायची?")
+                            .setMessage(item.optString("category") + " - ₹" + String.format(Locale.US, "%.2f", amount))
+                            .setPositiveButton("Delete") { _, _ ->
+                                val latest = loadExpenseRecords()
+                                val rebuilt = JSONArray()
+                                for (j in 0 until latest.length()) {
+                                    val entry = latest.optJSONObject(j) ?: continue
+                                    if (entry.optLong("createdAt") != item.optLong("createdAt")) rebuilt.put(entry)
+                                }
+                                saveExpenseRecords(rebuilt)
+                                render()
+                                showMessage("खर्च नोंद Delete झाली.")
+                            }
+                            .setNegativeButton("रद्द", null).show()
+                    }
+                }
+                list.addView(row, LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { setMargins(0, 5, 0, 5) })
+            }
+        }
+
+        addButton(page, "नवीन खर्च नोंदवा") {
+            val form = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(20, 8, 20, 4)
+            }
+            val category = Spinner(this)
+            val categories = listOf("स्टेशनरी", "इंटरनेट / मोबाईल", "वीज बिल", "प्रवास", "प्रिंटिंग साहित्य", "दुकान भाडे", "इतर")
+            category.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, categories)
+            form.addView(category)
+            val amount = EditText(this).apply {
+                hint = "खर्चाची रक्कम (₹)"
+                inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+            }
+            form.addView(amount)
+            val note = EditText(this).apply {
+                hint = "तपशील (ऐच्छिक)"
+                setSingleLine(true)
+            }
+            form.addView(note)
+            AlertDialog.Builder(this)
+                .setTitle("नवीन खर्च नोंद")
+                .setView(form)
+                .setPositiveButton("जतन करा") { _, _ ->
+                    val value = amount.text.toString().trim().toDoubleOrNull()
+                    if (value == null || value <= 0.0) {
+                        showMessage("कृपया योग्य खर्चाची रक्कम भरा.")
+                    } else {
+                        val saved = loadExpenseRecords()
+                        saved.put(JSONObject().apply {
+                            put("category", category.selectedItem.toString())
+                            put("amount", value)
+                            put("note", note.text.toString().trim())
+                            put("date", SimpleDateFormat("dd-MM-yyyy hh:mm a", Locale("mr", "IN")).format(Date()))
+                            put("createdAt", System.currentTimeMillis())
+                        })
+                        saveExpenseRecords(saved)
+                        render()
+                        showMessage("खर्चाची नोंद जतन झाली.")
+                    }
+                }
+                .setNegativeButton("रद्द", null)
+                .show()
+        }
+        addButton(page, "मुख्य पानावर जा") { showHome() }
+        render()
         setContentView(page)
     }
 
