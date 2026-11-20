@@ -117,6 +117,15 @@ class MainActivity : AppCompatActivity() {
                 setTextColor(Color.BLACK)
                 setPadding(12, 18, 12, 18)
                 setBackgroundColor(Color.rgb(240, 245, 250))
+                isClickable = true
+                isFocusable = true
+                setOnClickListener {
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle(service)
+                        .setMessage("तुम्ही ही सेवा निवडली आहे.")
+                        .setPositiveButton("ठीक आहे", null)
+                        .show()
+                }
             }
 
             list.addView(
