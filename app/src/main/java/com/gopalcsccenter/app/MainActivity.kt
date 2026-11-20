@@ -118,6 +118,7 @@ class MainActivity : AppCompatActivity() {
         addButton(layout, "ग्राहक यादी / संपूर्ण इतिहास") { showCustomerDirectory() }
         addButton(layout, "अर्ज ट्रॅकिंग") { showApplicationTracking() }
         addButton(layout, "दैनिक उत्पन्न अहवाल") { showDailyIncomeReport() }
+        addButton(layout, "मासिक उत्पन्न अहवाल") { showMonthlyIncomeReport() }
         addButton(layout, "सेवानुसार उत्पन्न अहवाल") { showServiceIncomeReport() }
         addButton(layout, "सूचना केंद्र") { showNotificationCenter() }
         addButton(layout, "Document Checklist") { showDocumentChecklist() }
@@ -1300,6 +1301,91 @@ class MainActivity : AppCompatActivity() {
             .setView(scroll)
             .setPositiveButton("ठीक आहे", null)
             .show()
+    }
+
+    private fun showMonthlyIncomeReport() {
+        val now = java.util.Calendar.getInstance()
+        DatePickerDialog(
+            this,
+            { _, year, month, _ ->
+                val selectedMonth = String.format(Locale.US, "%04d%02d", year, month + 1)
+                val monthLabel = SimpleDateFormat("MMMM yyyy", Locale("mr", "IN")).format(
+                    java.util.Calendar.getInstance().apply {
+                        set(java.util.Calendar.YEAR, year)
+                        set(java.util.Calendar.MONTH, month)
+                        set(java.util.Calendar.DAY_OF_MONTH, 1)
+                    }.time
+                )
+                val records = loadBillRecords()
+                var billCount = 0
+                var paidCount = 0
+                var pendingCount = 0
+                var received = 0.0
+                var pending = 0.0
+                val serviceTotals = linkedMapOf<String, DoubleArray>()
+
+                for (i in 0 until records.length()) {
+                    val item = records.optJSONObject(i) ?: continue
+                    val createdAt = item.optLong("createdAt", 0L)
+                    if (createdAt <= 0L ||
+                        SimpleDateFormat("yyyyMM", Locale.US).format(Date(createdAt)) != selectedMonth
+                    ) continue
+
+                    billCount++
+                    val amount = item.optDouble("amount", 0.0)
+                    val status = item.optString("paymentStatus")
+                    val values = serviceTotals.getOrPut(item.optString("service", "इतर सेवा")) {
+                        doubleArrayOf(0.0, 0.0, 0.0)
+                    }
+                    values[0] += 1.0
+                    if (status == "रोख भरले" || status == "UPI भरले") {
+                        paidCount++
+                        received += amount
+                        values[1] += amount
+                    } else {
+                        pendingCount++
+                        pending += amount
+                        values[2] += amount
+                    }
+                }
+
+                val report = StringBuilder()
+                report.append("महिना: ").append(monthLabel).append("\n")
+                report.append("एकूण बिले: ").append(billCount).append("\n")
+                report.append("पेमेंट जमा: ").append(paidCount).append(" बिले\n")
+                report.append("पेमेंट बाकी: ").append(pendingCount).append(" बिले\n\n")
+                report.append("जमा उत्पन्न: ₹").append(String.format(Locale.US, "%.2f", received)).append("\n")
+                report.append("बाकी रक्कम: ₹").append(String.format(Locale.US, "%.2f", pending)).append("\n")
+                report.append("एकूण बिल रक्कम: ₹").append(String.format(Locale.US, "%.2f", received + pending))
+                if (serviceTotals.isNotEmpty()) {
+                    report.append("\n\nसेवानुसार तपशील\n------------------------------")
+                    serviceTotals.forEach { (service, values) ->
+                        report.append("\n\n").append(service)
+                        report.append("\nबिले: ").append(values[0].toInt())
+                        report.append("\nजमा: ₹").append(String.format(Locale.US, "%.2f", values[1]))
+                        report.append("\nबाकी: ₹").append(String.format(Locale.US, "%.2f", values[2]))
+                    }
+                } else {
+                    report.append("\n\nया महिन्यात कोणतेही बिल नाही.")
+                }
+
+                val message = TextView(this).apply {
+                    text = report.toString()
+                    textSize = 16f
+                    setTextColor(Color.BLACK)
+                    setPadding(28, 16, 28, 16)
+                }
+                val scroll = ScrollView(this).apply { addView(message) }
+                AlertDialog.Builder(this)
+                    .setTitle("मासिक उत्पन्न अहवाल")
+                    .setView(scroll)
+                    .setPositiveButton("ठीक आहे", null)
+                    .show()
+            },
+            now.get(java.util.Calendar.YEAR),
+            now.get(java.util.Calendar.MONTH),
+            now.get(java.util.Calendar.DAY_OF_MONTH)
+        ).show()
     }
 
     private fun createReceiptPdf(receipt: String, billNumber: String): File {
