@@ -116,6 +116,7 @@ class MainActivity : AppCompatActivity() {
         addButton(layout, "ग्राहक / बिल इतिहास") { showBillHistory() }
         addButton(layout, "अर्ज ट्रॅकिंग") { showApplicationTracking() }
         addButton(layout, "दैनिक उत्पन्न अहवाल") { showDailyIncomeReport() }
+        addButton(layout, "Document Checklist") { showDocumentChecklist() }
         addButton(layout, "Admin Panel") { showAdminInfo() }
         addButton(layout, "Document Scanner") {
             showMessage("Document Scanner पुढील टप्प्यात जोडला जाईल.")
@@ -557,6 +558,94 @@ class MainActivity : AppCompatActivity() {
         }
         prefs.edit().putString("bills", records.toString()).apply()
         showMessage("अर्ज स्थिती अपडेट झाली.")
+    }
+
+    private fun showDocumentChecklist() {
+        val page = createLayout()
+        addTitle(page, "आवश्यक कागदपत्रांची यादी")
+
+        val serviceLabel = TextView(this).apply {
+            text = "सेवा निवडा"
+            textSize = 16f
+            setTextColor(Color.DKGRAY)
+        }
+        page.addView(serviceLabel)
+        val serviceSpinner = Spinner(this)
+        serviceSpinner.adapter = ArrayAdapter(
+            this, android.R.layout.simple_spinner_dropdown_item, services
+        )
+        page.addView(serviceSpinner)
+
+        val hint = TextView(this).apply {
+            text = "मिळालेल्या कागदपत्रांसमोर टिकमार्क करा. निवड आपोआप सेव्ह होईल."
+            textSize = 14f
+            setTextColor(Color.DKGRAY)
+            setPadding(0, 10, 0, 10)
+        }
+        page.addView(hint)
+
+        val scroll = ScrollView(this)
+        val checklistLayout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        scroll.addView(checklistLayout)
+        page.addView(scroll, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+        ))
+
+        val checklist = mapOf(
+            "आधार कार्ड सेवा" to listOf("आधार कार्ड (असल्यास)", "जन्म प्रमाणपत्र (बाल आधारसाठी)", "मोबाईल नंबर", "पत्ता / ओळख पुरावा (सेवेनुसार)"),
+            "पॅन कार्ड सेवा" to listOf("आधार कार्ड", "मोबाईल नंबर", "ई-मेल आयडी", "फोटो व स्वाक्षरी (लागू असल्यास)"),
+            "MahaDBT अर्ज" to listOf("आधार कार्ड", "बँक पासबुक", "7/12 उतारा (लागू असल्यास)", "8-A उतारा (लागू असल्यास)", "Farmer ID / जात प्रमाणपत्र (योजनेनुसार)"),
+            "जात प्रमाणपत्र" to listOf("आधार कार्ड", "रहिवासी / पत्ता पुरावा", "शाळा सोडल्याचा दाखला (लागू असल्यास)", "वडिलांचे / नातेवाईकांचे जात प्रमाणपत्र (लागू असल्यास)", "पासपोर्ट फोटो"),
+            "उत्पन्न प्रमाणपत्र" to listOf("आधार कार्ड", "रहिवासी पुरावा", "उत्पन्नाचा पुरावा", "रेशन कार्ड (लागू असल्यास)", "पासपोर्ट फोटो"),
+            "रहिवासी प्रमाणपत्र" to listOf("आधार कार्ड", "पत्ता पुरावा", "रेशन कार्ड / वीज बिल (लागू असल्यास)", "पासपोर्ट फोटो"),
+            "रेल्वे तिकीट बुकिंग" to listOf("प्रवाशाचे पूर्ण नाव", "प्रवाशाचे वय", "प्रवासाची तारीख", "प्रवासाचे ठिकाण व वेळ", "मोबाईल नंबर"),
+            "बस तिकीट बुकिंग" to listOf("प्रवाशाचे पूर्ण नाव", "प्रवासाची तारीख", "प्रवासाचे ठिकाण", "मोबाईल नंबर"),
+            "विमान तिकीट बुकिंग" to listOf("ओळखपत्रानुसार पूर्ण नाव", "प्रवासाची तारीख", "प्रस्थान व गंतव्य ठिकाण", "मोबाईल नंबर", "ई-मेल आयडी"),
+            "ऑनलाइन फॉर्म" to listOf("आधार कार्ड (लागू असल्यास)", "मोबाईल नंबर", "ई-मेल आयडी", "संबंधित अर्जासाठी आवश्यक कागदपत्रे"),
+            "प्रिंट आणि झेरॉक्स" to listOf("मूळ कागदपत्रे किंवा स्पष्ट PDF / फोटो", "प्रिंटसाठी आवश्यक पानांची माहिती")
+        )
+
+        fun renderChecklist(service: String) {
+            checklistLayout.removeAllViews()
+            val prefs = getSharedPreferences("gopal_csc_checklists", MODE_PRIVATE)
+            val key = "checked_" + service.hashCode()
+            val saved = prefs.getStringSet(key, emptySet())?.toMutableSet() ?: mutableSetOf()
+            (checklist[service] ?: listOf("संबंधित सेवेसाठी आवश्यक कागदपत्रे")).forEach { document ->
+                val check = CheckBox(this).apply {
+                    text = document
+                    textSize = 16f
+                    isChecked = saved.contains(document)
+                    setPadding(8, 10, 8, 10)
+                    setOnCheckedChangeListener { _, checked ->
+                        if (checked) saved.add(document) else saved.remove(document)
+                        prefs.edit().putStringSet(key, HashSet(saved)).apply()
+                    }
+                }
+                checklistLayout.addView(check, LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+                ))
+            }
+            val clear = Button(this).apply {
+                text = "या सेवेची टिकमार्क यादी रीसेट करा"
+                isAllCaps = false
+                setOnClickListener {
+                    saved.clear()
+                    prefs.edit().remove(key).apply()
+                    renderChecklist(service)
+                }
+            }
+            checklistLayout.addView(clear)
+        }
+
+        serviceSpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
+                renderChecklist(services[position])
+            }
+        }
+
+        addButton(page, "मुख्य पानावर जा") { showHome() }
+        setContentView(page)
     }
 
     private fun showDailyIncomeReport() {
