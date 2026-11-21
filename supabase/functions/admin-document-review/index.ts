@@ -43,7 +43,7 @@ Deno.serve(async (request) => {
     await verifyAdmin(request);
 
     const url = Deno.env.get("SUPABASE_URL");
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const serviceKey = Deno.env.get("SERVICE_ROLE_KEY");
     if (!url || !serviceKey) throw new Error("Server configuration is incomplete.");
 
     const supabase = createClient(url, serviceKey, {
