@@ -25,6 +25,7 @@ create table if not exists public.customer_documents (
   customer_id uuid not null references auth.users(id) on delete cascade,
   document_type text not null,
   storage_path text not null unique,
+  replaces_document_id uuid references public.customer_documents(id),
   review_status text not null default 'Pending'
     check (review_status in ('Pending', 'Approved', 'Rejected')),
   rejection_reason text,
@@ -38,6 +39,9 @@ create index if not exists customer_documents_customer_id_idx
   on public.customer_documents(customer_id);
 create index if not exists customer_documents_application_id_idx
   on public.customer_documents(application_id);
+create unique index if not exists customer_documents_one_replacement_idx
+  on public.customer_documents(replaces_document_id)
+  where replaces_document_id is not null;
 
 alter table public.customer_profiles enable row level security;
 alter table public.customer_applications enable row level security;
@@ -52,7 +56,6 @@ drop policy if exists "applications_insert_own_or_admin" on public.customer_appl
 drop policy if exists "applications_update_admin" on public.customer_applications;
 drop policy if exists "documents_select_own_or_admin" on public.customer_documents;
 drop policy if exists "documents_insert_own" on public.customer_documents;
-drop policy if exists "documents_replace_rejected_own" on public.customer_documents;
 drop policy if exists "documents_review_admin" on public.customer_documents;
 
 create policy "profile_select_own_or_admin"
@@ -89,23 +92,21 @@ create policy "documents_insert_own"
 on public.customer_documents for insert to authenticated
 with check (
   customer_id = auth.uid()
-  and exists (
-    select 1 from public.customer_applications a
-    where a.id = application_id and a.customer_id = auth.uid()
-  )
-);
-
--- A customer may replace only a document previously rejected by Admin.
-create policy "documents_replace_rejected_own"
-on public.customer_documents for update to authenticated
-using (customer_id = auth.uid() and review_status = 'Rejected')
-with check (
-  customer_id = auth.uid()
   and review_status = 'Pending'
   and rejection_reason is null
   and exists (
     select 1 from public.customer_applications a
     where a.id = application_id and a.customer_id = auth.uid()
+  )
+  and (
+    replaces_document_id is null
+    or exists (
+      select 1 from public.customer_documents old_doc
+      where old_doc.id = replaces_document_id
+        and old_doc.customer_id = auth.uid()
+        and old_doc.application_id = application_id
+        and old_doc.review_status = 'Rejected'
+    )
   )
 );
 
@@ -118,7 +119,6 @@ with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 -- Object names must start with the authenticated user's UUID: <uid>/<application-id>/<filename>
 drop policy if exists "customer_docs_read_own_or_admin" on storage.objects;
 drop policy if exists "customer_docs_upload_own" on storage.objects;
-drop policy if exists "customer_docs_update_own" on storage.objects;
 drop policy if exists "customer_docs_admin_all" on storage.objects;
 
 create policy "customer_docs_read_own_or_admin"
@@ -133,17 +133,6 @@ using (
 
 create policy "customer_docs_upload_own"
 on storage.objects for insert to authenticated
-with check (
-  bucket_id = 'customer-documents'
-  and (storage.foldername(name))[1] = auth.uid()::text
-);
-
-create policy "customer_docs_update_own"
-on storage.objects for update to authenticated
-using (
-  bucket_id = 'customer-documents'
-  and (storage.foldername(name))[1] = auth.uid()::text
-)
 with check (
   bucket_id = 'customer-documents'
   and (storage.foldername(name))[1] = auth.uid()::text
