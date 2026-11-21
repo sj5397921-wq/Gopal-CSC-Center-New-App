@@ -1,0 +1,2 @@
+[functions.admin-document-review]
+verify_jwt = false
