@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - feature/customer-login-cloud-sync
 
 jobs:
   build:
