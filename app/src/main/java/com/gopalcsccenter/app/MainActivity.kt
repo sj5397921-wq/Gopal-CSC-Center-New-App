@@ -159,7 +159,7 @@ class MainActivity : AppCompatActivity() {
         val page = createLayout()
         addTitle(page, "ग्राहक Login / नोंदणी")
         val info = TextView(this).apply {
-            text = "मोबाईल नंबर आणि पासवर्ड वापरून ग्राहक खाते उघडा किंवा Login करा. खाते तयार करताना Supabase मध्ये Phone confirmation बंद असल्यासच तत्काळ Login शक्य होऊ शकते."
+            text = "मोबाईल नंबर आणि पासवर्ड वापरून ग्राहक खाते तयार करा किंवा Login करा. OTP आवश्यक नाही. ग्राहक खाते Supabase Email/Password सेवेद्वारे सुरक्षितपणे हाताळले जाईल."
             textSize = 14f
             setTextColor(Color.DKGRAY)
             setPadding(6, 8, 6, 14)
