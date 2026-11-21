@@ -159,27 +159,35 @@ class MainActivity : AppCompatActivity() {
         val page = createLayout()
         addTitle(page, "ग्राहक Login / नोंदणी")
         val info = TextView(this).apply {
-            text = "मोबाईल नंबर आणि पासवर्ड वापरून ग्राहक खाते तयार करा किंवा Login करा. OTP आवश्यक नाही. ग्राहक खाते Supabase Email/Password सेवेद्वारे सुरक्षितपणे हाताळले जाईल."
+            text = "Login साठी फक्त मोबाईल नंबर आणि पासवर्ड आवश्यक. नवीन खाते तयार करताना पूर्ण नाव भरा. OTP आवश्यक नाही."
             textSize = 14f
             setTextColor(Color.DKGRAY)
             setPadding(6, 8, 6, 14)
         }
         page.addView(info)
+
         val name = addField(page, "पूर्ण नाव")
-        val phone = addField(page, "मोबाईल नंबर (देश कोडसह, उदा. +919876543210)", InputType.TYPE_CLASS_PHONE)
+        name.visibility = android.view.View.GONE
+        val phone = addField(page, "मोबाईल नंबर (+91 नंतर 10 अंक)", InputType.TYPE_CLASS_PHONE)
+        phone.setText("+91")
+        phone.filters = arrayOf(android.text.InputFilter.LengthFilter(13))
+        phone.setSelection(phone.text.length)
         val password = addField(page, "पासवर्ड (किमान 8 अक्षरे)", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
         password.transformationMethod = android.text.method.PasswordTransformationMethod.getInstance()
+
         val status = TextView(this).apply {
             textSize = 14f
             setTextColor(Color.rgb(20, 80, 160))
             setPadding(4, 8, 4, 8)
         }
         page.addView(status)
+        var registrationMode = false
+
         fun validate(): Pair<String, String>? {
             val p = phone.text.toString().trim()
             val pw = password.text.toString()
-            if (!p.matches(Regex("^\\+[1-9][0-9]{7,14}$"))) {
-                phone.error = "देश कोडसह योग्य नंबर भरा. उदा. +919876543210"
+            if (!p.matches(Regex("^\\\\+91[0-9]{10}$"))) {
+                phone.error = " +91 नंतर नेमके 10 अंक भरा"
                 return null
             }
             if (pw.length < 8) {
@@ -188,6 +196,7 @@ class MainActivity : AppCompatActivity() {
             }
             return Pair(p, pw)
         }
+
         fun handleResult(result: SupabaseCustomerAuth.Result) {
             runOnUiThread {
                 status.text = result.message
@@ -200,20 +209,54 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
-        addButton(page, "Login करा") {
-            val values = validate() ?: return@addButton
-            status.text = "Login सुरू आहे..."
-            customerAuth.signIn(values.first, values.second, ::handleResult)
-        }
-        addButton(page, "नवीन ग्राहक खाते तयार करा") {
-            val values = validate() ?: return@addButton
-            val fullName = name.text.toString().trim()
-            if (fullName.isBlank()) {
-                name.error = "पूर्ण नाव भरा"
-                return@addButton
+
+        val loginButton = Button(this).apply {
+            text = "Login करा"
+            isAllCaps = false
+            textSize = 16f
+            setOnClickListener {
+                registrationMode = false
+                name.visibility = android.view.View.GONE
+                val values = validate() ?: return@setOnClickListener
+                status.text = "Login सुरू आहे..."
+                customerAuth.signIn(values.first, values.second, ::handleResult)
             }
-            status.text = "खाते तयार होत आहे..."
-            customerAuth.signUp(values.first, values.second, fullName, ::handleResult)
+        }
+        page.addView(loginButton, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { setMargins(0, 10, 0, 10) })
+
+        val registerButton = Button(this).apply {
+            text = "नवीन खाते तयार करा"
+            isAllCaps = false
+            textSize = 16f
+            setOnClickListener {
+                if (!registrationMode) {
+                    registrationMode = true
+                    name.visibility = android.view.View.VISIBLE
+                    text = "खाते तयार करा"
+                    status.text = "नवीन खात्यासाठी पूर्ण नाव भरा."
+                    return@setOnClickListener
+                }
+                val values = validate() ?: return@setOnClickListener
+                val fullName = name.text.toString().trim()
+                if (fullName.isBlank()) {
+                    name.error = "पूर्ण नाव भरा"
+                    return@setOnClickListener
+                }
+                status.text = "खाते तयार होत आहे..."
+                customerAuth.signUp(values.first, values.second, fullName, ::handleResult)
+            }
+        }
+        page.addView(registerButton, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { setMargins(0, 10, 0, 10) })
+
+        addButton(page, "Login पर्यायावर परत जा") {
+            registrationMode = false
+            name.visibility = android.view.View.GONE
+            registerButton.text = "नवीन खाते तयार करा"
+            status.text = ""
         }
         addButton(page, "मुख्य पानावर जा") { showHome() }
         setContentView(page)
