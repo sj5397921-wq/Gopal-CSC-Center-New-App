@@ -1264,17 +1264,17 @@ class MainActivity : AppCompatActivity() {
                 data = android.net.Uri.parse("smsto:$destination")
                 putExtra("sms_body", message)
             }
-            if (smsIntent.resolveActivity(packageManager) == null) {
-                showMessage("या फोनमध्ये SMS पाठवण्याचे Messages अॅप उपलब्ध नाही. अर्ज स्थिती सेव्ह झाली.")
-                return
-            }
+            // Do not pre-check resolveActivity: Android 11+ package visibility can
+            // hide SMS handlers from queries even when a default Messages app exists.
             item.put("lastSmsPreparedStatus", status)
             getSharedPreferences("gopal_csc_records", MODE_PRIVATE).edit()
                 .putString("bills", records.toString()).apply()
             startActivity(smsIntent)
             showMessage("SMS मजकूर तयार आहे. Messages अॅपमध्ये तपासून Send दाबा.")
+        } catch (e: android.content.ActivityNotFoundException) {
+            showMessage("SMS अॅप उघडता आले नाही. Messages अॅपचे Default SMS सेटिंग तपासा. अर्ज स्थिती सेव्ह झाली.")
         } catch (e: Exception) {
-            showMessage("अर्ज स्थिती सेव्ह झाली; SMS मजकूर उघडता आला नाही.")
+            showMessage("अर्ज स्थिती सेव्ह झाली; SMS उघडताना त्रुटी आली.")
         }
     }
 
