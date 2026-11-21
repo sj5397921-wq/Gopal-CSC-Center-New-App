@@ -52,6 +52,9 @@ class MainActivity : AppCompatActivity() {
     private val chooseApplicationDocumentsRequest = 704
     private val firebaseAuth: FirebaseAuth by lazy { FirebaseAuth.getInstance() }
     private var adminVerificationId: String? = null
+    private val customerAuth = SupabaseCustomerAuth()
+    private var customerAccessToken: String? = null
+    private var customerUserId: String? = null
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         showHome()
@@ -123,6 +126,7 @@ class MainActivity : AppCompatActivity() {
         }
         layout.addView(subtitle)
 
+        addButton(layout, "ग्राहक Login / नवीन खाते") { showCustomerAccount() }
         addButton(layout, "Admin Login") { showAdminInfo() }
         addButton(layout, "उपलब्ध सेवा") { showServices() }
         addButton(layout, "ग्राहक / बिल इतिहास") { showBillHistory() }
@@ -148,6 +152,93 @@ class MainActivity : AppCompatActivity() {
             ))
         }
         setContentView(homeScroll)
+    }
+
+
+    private fun showCustomerAccount() {
+        val page = createLayout()
+        addTitle(page, "ग्राहक Login / नोंदणी")
+        val info = TextView(this).apply {
+            text = "मोबाईल नंबर आणि पासवर्ड वापरून ग्राहक खाते उघडा किंवा Login करा. खाते तयार करताना Supabase मध्ये Phone confirmation बंद असल्यासच तत्काळ Login शक्य होऊ शकते."
+            textSize = 14f
+            setTextColor(Color.DKGRAY)
+            setPadding(6, 8, 6, 14)
+        }
+        page.addView(info)
+        val name = addField(page, "पूर्ण नाव")
+        val phone = addField(page, "मोबाईल नंबर (देश कोडसह, उदा. +919876543210)", InputType.TYPE_CLASS_PHONE)
+        val password = addField(page, "पासवर्ड (किमान 8 अक्षरे)", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
+        password.transformationMethod = android.text.method.PasswordTransformationMethod.getInstance()
+        val status = TextView(this).apply {
+            textSize = 14f
+            setTextColor(Color.rgb(20, 80, 160))
+            setPadding(4, 8, 4, 8)
+        }
+        page.addView(status)
+        fun validate(): Pair<String, String>? {
+            val p = phone.text.toString().trim()
+            val pw = password.text.toString()
+            if (!p.matches(Regex("^\\+[1-9][0-9]{7,14}$"))) {
+                phone.error = "देश कोडसह योग्य नंबर भरा. उदा. +919876543210"
+                return null
+            }
+            if (pw.length < 8) {
+                password.error = "किमान 8 अक्षरांचा पासवर्ड ठेवा"
+                return null
+            }
+            return Pair(p, pw)
+        }
+        fun handleResult(result: SupabaseCustomerAuth.Result) {
+            runOnUiThread {
+                status.text = result.message
+                if (result.success && !result.accessToken.isNullOrBlank()) {
+                    customerAccessToken = result.accessToken
+                    customerUserId = result.userId
+                    showCustomerPortal()
+                } else {
+                    showMessage(result.message)
+                }
+            }
+        }
+        addButton(page, "Login करा") {
+            val values = validate() ?: return@addButton
+            status.text = "Login सुरू आहे..."
+            customerAuth.signIn(values.first, values.second, ::handleResult)
+        }
+        addButton(page, "नवीन ग्राहक खाते तयार करा") {
+            val values = validate() ?: return@addButton
+            val fullName = name.text.toString().trim()
+            if (fullName.isBlank()) {
+                name.error = "पूर्ण नाव भरा"
+                return@addButton
+            }
+            status.text = "खाते तयार होत आहे..."
+            customerAuth.signUp(values.first, values.second, fullName, ::handleResult)
+        }
+        addButton(page, "मुख्य पानावर जा") { showHome() }
+        setContentView(page)
+    }
+
+    private fun showCustomerPortal() {
+        if (customerAccessToken.isNullOrBlank() || customerUserId.isNullOrBlank()) {
+            showCustomerAccount()
+            return
+        }
+        val page = createLayout()
+        addTitle(page, "ग्राहक खाते")
+        page.addView(TextView(this).apply {
+            text = "Login यशस्वी. ग्राहक खाते सुरक्षितपणे जोडले गेले आहे. अर्ज आणि कागदपत्रांचे क्लाउड सिंक पुढील टप्प्यात जोडले जाईल."
+            textSize = 16f
+            setTextColor(Color.DKGRAY)
+            setPadding(8, 12, 8, 20)
+        })
+        addButton(page, "Logout") {
+            customerAccessToken = null
+            customerUserId = null
+            showCustomerAccount()
+        }
+        addButton(page, "मुख्य पानावर जा") { showHome() }
+        setContentView(page)
     }
 
     private fun showServices() {
