@@ -1,11 +1,5 @@
 package com.gopalcsccenter.app
 
-import android.Manifest
-import android.content.pm.PackageManager
-import android.telephony.SmsManager
-import androidx.core.content.ContextCompat
-import androidx.activity.result.ActivityResultLauncher
-import androidx.activity.result.contract.ActivityResultContracts
 import android.os.Bundle
 import android.provider.OpenableColumns
 import android.app.DatePickerDialog
@@ -58,23 +52,8 @@ class MainActivity : AppCompatActivity() {
     private val chooseApplicationDocumentsRequest = 704
     private val firebaseAuth: FirebaseAuth by lazy { FirebaseAuth.getInstance() }
     private var adminVerificationId: String? = null
-    private lateinit var smsPermissionLauncher: ActivityResultLauncher<String>
-    private var pendingSmsBillNumber: String? = null
-    private var pendingSmsStatus: String? = null
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        smsPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            val billNumber = pendingSmsBillNumber
-            val status = pendingSmsStatus
-            pendingSmsBillNumber = null
-            pendingSmsStatus = null
-            if (granted && billNumber != null && status != null) {
-                sendApplicationStatusSms(billNumber, status)
-            } else if (!granted) {
-                showMessage("SMS परवानगी नाकारली. स्थिती सेव्ह झाली; SMS पाठवला नाही.")
-            }
-        }
         showHome()
     }
 
@@ -1224,12 +1203,12 @@ class MainActivity : AppCompatActivity() {
         }
         val records = loadBillRecords()
         var found = false
-        var alreadySent = false
+        var alreadyPrepared = false
         for (i in 0 until records.length()) {
             val item = records.optJSONObject(i) ?: continue
             if (item.optString("billNumber") == billNumber) {
                 found = true
-                alreadySent = item.optString("lastSmsStatus") == status
+                alreadyPrepared = item.optString("lastSmsPreparedStatus") == status
                 if (item.optString("applicationStatus", "अर्ज प्राप्त") != status) {
                     item.put("applicationStatus", status)
                 }
@@ -1242,23 +1221,16 @@ class MainActivity : AppCompatActivity() {
         }
         getSharedPreferences("gopal_csc_records", MODE_PRIVATE).edit()
             .putString("bills", records.toString()).apply()
-        if (alreadySent) {
-            showMessage("ही स्थिती आधीच SMS केली आहे.")
+        if (alreadyPrepared) {
+            showMessage("या स्थितीसाठी SMS मजकूर आधीच तयार केला आहे.")
             return
         }
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED) {
-            sendApplicationStatusSms(billNumber, status)
-        } else {
-            pendingSmsBillNumber = billNumber
-            pendingSmsStatus = status
-            smsPermissionLauncher.launch(Manifest.permission.SEND_SMS)
-        }
+        prepareApplicationStatusSms(billNumber, status)
     }
 
-    @Suppress("DEPRECATION")
-    private fun sendApplicationStatusSms(billNumber: String, status: String) {
+    private fun prepareApplicationStatusSms(billNumber: String, status: String) {
         if (firebaseAuth.currentUser?.email != authorizedAdminEmail) {
-            showMessage("SMS पाठवण्याचा अधिकार फक्त Admin कडे आहे.")
+            showMessage("SMS तयार करण्याचा अधिकार फक्त Admin कडे आहे.")
             return
         }
         val records = loadBillRecords()
@@ -1274,38 +1246,35 @@ class MainActivity : AppCompatActivity() {
             showMessage("अर्ज नोंद सापडली नाही.")
             return
         }
-        val rawPhone = item.optString("phone").trim()
-        val phoneDigits = rawPhone.filter { it.isDigit() }
+        val phoneDigits = item.optString("phone").filter { it.isDigit() }
         val destination = when {
             phoneDigits.length == 10 -> "+91$phoneDigits"
             phoneDigits.length == 12 && phoneDigits.startsWith("91") -> "+$phoneDigits"
             else -> {
-                showMessage("ग्राहकाचा मोबाईल नंबर योग्य नाही. SMS पाठवता आला नाही.")
+                showMessage("ग्राहकाचा मोबाईल नंबर योग्य नाही. अर्ज स्थिती सेव्ह झाली.")
                 return
             }
-        }
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
-            showMessage("SMS परवानगी उपलब्ध नाही.")
-            return
         }
         val appNo = item.optString("applicationNo", "GAPP" + billNumber.takeLast(8))
         val customerName = item.optString("customerName", "ग्राहक")
         val service = item.optString("service", "")
         val message = "Gopal CSC Center: प्रिय $customerName, तुमच्या अर्ज क्र. $appNo ($service) ची स्थिती '$status' झाली आहे."
         try {
-            val smsManager = SmsManager.getDefault()
-            val parts = smsManager.divideMessage(message)
-            if (parts.size > 1) {
-                smsManager.sendMultipartTextMessage(destination, null, parts, null, null)
-            } else {
-                smsManager.sendTextMessage(destination, null, message, null, null)
+            val smsIntent = Intent(Intent.ACTION_SENDTO).apply {
+                data = android.net.Uri.parse("smsto:$destination")
+                putExtra("sms_body", message)
             }
-            item.put("lastSmsStatus", status)
+            if (smsIntent.resolveActivity(packageManager) == null) {
+                showMessage("या फोनमध्ये SMS पाठवण्याचे Messages अॅप उपलब्ध नाही. अर्ज स्थिती सेव्ह झाली.")
+                return
+            }
+            item.put("lastSmsPreparedStatus", status)
             getSharedPreferences("gopal_csc_records", MODE_PRIVATE).edit()
                 .putString("bills", records.toString()).apply()
-            showMessage("अर्ज स्थिती अपडेट झाली. SMS पाठवण्याची विनंती फोनला दिली.")
+            startActivity(smsIntent)
+            showMessage("SMS मजकूर तयार आहे. Messages अॅपमध्ये तपासून Send दाबा.")
         } catch (e: Exception) {
-            showMessage("स्थिती अपडेट झाली; SMS पाठवता आला नाही: " + (e.message ?: "SMS त्रुटी"))
+            showMessage("अर्ज स्थिती सेव्ह झाली; SMS मजकूर उघडता आला नाही.")
         }
     }
 
