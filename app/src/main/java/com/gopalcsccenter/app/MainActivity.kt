@@ -186,7 +186,7 @@ class MainActivity : AppCompatActivity() {
         fun validate(): Pair<String, String>? {
             val p = phone.text.toString().trim()
             val pw = password.text.toString()
-            if (!p.matches(Regex("^\\\\+91[0-9]{10}$"))) {
+            if (!p.matches(Regex("^\\+91[0-9]{10}$"))) {
                 phone.error = " +91 नंतर नेमके 10 अंक भरा"
                 return null
             }
