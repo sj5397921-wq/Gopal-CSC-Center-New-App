@@ -26,9 +26,10 @@ class SupabaseCustomerAuth {
             .put("phone", phone).put("password", password), callback)
     }
 
-    fun signUp(phone: String, password: String, callback: (Result) -> Unit) {
+    fun signUp(phone: String, password: String, fullName: String, callback: (Result) -> Unit) {
         request("/auth/v1/signup", JSONObject()
-            .put("phone", phone).put("password", password), callback)
+            .put("phone", phone).put("password", password)
+            .put("data", JSONObject().put("full_name", fullName)), callback)
     }
 
     private fun request(path: String, body: JSONObject, callback: (Result) -> Unit) {
