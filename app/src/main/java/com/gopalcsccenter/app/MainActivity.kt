@@ -473,8 +473,46 @@ class MainActivity : AppCompatActivity() {
         recordScreen("customer_welcome")
         val page = basePage()
         addHeading(page, t("customer_success"), "${t("hello")}, ${auth.currentUser?.displayName ?: t("customer")}")
+
+        val services = listOf(
+            listOf("आधार कार्ड सेवा", "Aadhaar Card Services", "आधार कार्ड सेवा"),
+            listOf("पॅन कार्ड सेवा", "PAN Card Services", "पैन कार्ड सेवा"),
+            listOf("MahaDBT अर्ज", "MahaDBT Application", "MahaDBT आवेदन"),
+            listOf("जात प्रमाणपत्र", "Caste Certificate", "जाति प्रमाणपत्र"),
+            listOf("उत्पन्न प्रमाणपत्र", "Income Certificate", "आय प्रमाणपत्र"),
+            listOf("रहिवासी प्रमाणपत्र", "Residence Certificate", "निवास प्रमाणपत्र"),
+            listOf("रेल्वे तिकीट बुकिंग", "Railway Ticket Booking", "रेलवे टिकट बुकिंग"),
+            listOf("बस तिकीट बुकिंग", "Bus Ticket Booking", "बस टिकट बुकिंग"),
+            listOf("विमान तिकीट बुकिंग", "Flight Ticket Booking", "हवाई टिकट बुकिंग"),
+            listOf("ऑनलाइन फॉर्म", "Online Forms", "ऑनलाइन फॉर्म"),
+            listOf("प्रिंट आणि झेरॉक्स", "Print & Xerox", "प्रिंट और ज़ेरॉक्स")
+        )
+
+        services.forEachIndexed { index, names ->
+            page.addView(TextView(this).apply {
+                text = "${index + 1}.  ${names[languageIndex]}"
+                textSize = 17f
+                setTextColor(Color.rgb(35, 48, 64))
+                setPadding(dp(16), dp(14), dp(16), dp(14))
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(Color.WHITE)
+                    cornerRadius = dp(12).toFloat()
+                    setStroke(dp(1), Color.rgb(220, 226, 240))
+                }
+                elevation = dp(2).toFloat()
+            }, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(0, dp(5), 0, dp(5))
+            })
+        }
+
         addAction(page, t("logout")) { auth.signOut(); screenHistory.clear(); showHome() }
-        setContentView(page)
+        setContentView(ScrollView(this).apply {
+            isFillViewport = true
+            addView(page)
+        })
     }
 
     private fun showAdminWelcome() {
