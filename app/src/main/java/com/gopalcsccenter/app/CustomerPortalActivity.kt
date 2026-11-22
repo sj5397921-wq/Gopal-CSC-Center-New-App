@@ -233,24 +233,73 @@ class CustomerPortalActivity : Activity() {
 
     private fun showServiceDetails(service: String) {
         selectedService = service
-        newPage(service)
-        addText(root, "या सेवेसाठी आवश्यक कागदपत्रे. प्रत्येक कागदासमोर PDF किंवा फोटो निवडा.", 14f)
+        newPage("ग्राहक माहिती")
+        addText(root, "निवडलेली सेवा: $service", 18f, Color.rgb(20, 80, 160))
+
+        fun addEntry(hint: String, value: String = "", inputType: Int = android.text.InputType.TYPE_CLASS_TEXT): EditText {
+            val edit = EditText(this).apply {
+                this.hint = hint
+                setText(value)
+                textSize = 16f
+                this.inputType = inputType
+                setSingleLine(true)
+            }
+            root.addView(edit, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ))
+            return edit
+        }
+
+        val nameField = addEntry("ग्राहकाचे पूर्ण नाव", fullName)
+        val phoneField = addEntry("मोबाईल नंबर (+91 सह)", phone, android.text.InputType.TYPE_CLASS_PHONE)
+        val fee = getSharedPreferences("gopal_csc_fees", MODE_PRIVATE)
+            .getFloat("fee_" + service.hashCode(), 0f).toDouble()
+        val feeField = addEntry("सेवा शुल्क (₹) — Admin ने निश्चित केलेले",
+            String.format(Locale.US, "%.2f", fee),
+            android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL)
+        feeField.isEnabled = false
+        feeField.isFocusable = false
+        val referenceField = addEntry("अर्ज / संदर्भ क्रमांक (ऐच्छिक)")
+
+        addText(root, "या सेवेसाठी आवश्यक कागदपत्रे", 17f, Color.rgb(20, 80, 160))
         val docs = getRequiredDocuments(service)
+        if (docs.isEmpty()) addText(root, "आवश्यक कागदपत्रांची यादी उपलब्ध नाही.", 14f)
         docs.forEach { document ->
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(8, 7, 8, 7)
+                setPadding(10, 8, 10, 8)
                 setBackgroundColor(Color.rgb(242, 246, 250))
             }
-            addText(card, document, 15f, Color.BLACK)
-            addButton(card, "＋ PDF / फोटो Upload करा") { chooseNewFile(document) }
+            addText(card, "• $document", 15f, Color.BLACK)
+            selectedFiles[document]?.let { addText(card, "निवडले: ${displayName(it)}", 12f, Color.rgb(20, 120, 70)) }
+            addButton(card, if (selectedFiles.containsKey(document)) "फाइल बदला" else "＋ PDF / फोटो Upload करा") {
+                chooseNewFile(document)
+            }
             root.addView(card, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { setMargins(0, 4, 0, 6) })
         }
-        addText(root, "टीप: लागू नसलेले कागदपत्र नंतरही देता येईल. किमान एक फाइल निवडून अर्ज पाठवा.", 12f, Color.GRAY)
-        addButton(root, "निवडलेले कागदपत्रे आणि अर्ज पाठवा") { submitApplication(service) }
+        addText(root, "टीप: अर्ज पाठवताना किमान एक PDF किंवा फोटो निवडा.", 12f, Color.GRAY)
+
+        addText(root, "पेमेंट स्थिती", 16f, Color.DKGRAY)
+        val payment = Spinner(this)
+        payment.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item,
+            listOf("बाकी", "रोख भरले", "UPI भरले"))
+        root.addView(payment)
+
+        addButton(root, "अर्ज पाठवा आणि कागदपत्रे Upload करा") {
+            val name = nameField.text.toString().trim()
+            val mobile = phoneField.text.toString().trim()
+            if (name.isBlank()) { nameField.error = "ग्राहकाचे पूर्ण नाव भरा"; return@addButton }
+            if (!mobile.matches(Regex("^\\+91[0-9]{10}$"))) {
+                phoneField.error = "+91 नंतर 10 अंक भरा"; return@addButton
+            }
+            fullName = name
+            phone = mobile
+            submitApplication(service, referenceField.text.toString().trim(), fee, payment.selectedItem.toString())
+        }
         addButton(root, "सेवा यादीकडे परत") { showServices() }
     }
 
@@ -289,7 +338,7 @@ class CustomerPortalActivity : Activity() {
         }
     }
 
-    private fun submitApplication(service: String) {
+    private fun submitApplication(service: String, reference: String, serviceFee: Double, paymentStatus: String) {
         if (selectedFiles.isEmpty()) {
             Toast.makeText(this, "किमान एक PDF किंवा फोटो निवडा.", Toast.LENGTH_LONG).show()
             return
@@ -302,6 +351,9 @@ class CustomerPortalActivity : Activity() {
                     .put("customer_id", userId)
                     .put("application_no", applicationNo)
                     .put("service_name", service)
+                    .put("reference_no", reference)
+                    .put("service_fee", serviceFee)
+                    .put("payment_status", paymentStatus)
                 val appRows = JSONArray(api(
                     "POST",
                     "/rest/v1/customer_applications?select=id",
