@@ -30,19 +30,7 @@ import com.google.firebase.FirebaseException
 
 class MainActivity : AppCompatActivity() {
 
-    private val services = listOf(
-        "आधार कार्ड सेवा",
-        "पॅन कार्ड सेवा",
-        "MahaDBT अर्ज",
-        "जात प्रमाणपत्र",
-        "उत्पन्न प्रमाणपत्र",
-        "रहिवासी प्रमाणपत्र",
-        "रेल्वे तिकीट बुकिंग",
-        "बस तिकीट बुकिंग",
-        "विमान तिकीट बुकिंग",
-        "ऑनलाइन फॉर्म",
-        "प्रिंट आणि झेरॉक्स"
-    )
+    private val services = CscServiceCatalog.services
 
     private lateinit var layout: LinearLayout
     private var pendingPdfFile: File? = null
