@@ -67,10 +67,11 @@ class CustomerPortalActivity : Activity() {
         } else {
             defaultRequiredDocuments[service].orEmpty()
         }
-        // Admin-selected checklist items are the exact requirements shown to customers.
-        val checked = prefs.getStringSet("checked_" + service.hashCode(), emptySet())
-            ?.toSet().orEmpty()
-        return documents.filter { checked.contains(it) }
+        // Match the Main Dashboard's Available Services form:
+        // show the complete saved/default document list to customers.
+        // Checklist ticks are optional admin-side selections and must not hide
+        // the service requirements from the customer upload screen.
+        return documents
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
