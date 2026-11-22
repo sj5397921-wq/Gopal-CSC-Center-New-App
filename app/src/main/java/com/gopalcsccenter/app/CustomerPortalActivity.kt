@@ -397,9 +397,18 @@ class CustomerPortalActivity : Activity() {
         showLoading("अर्ज आणि कागदपत्रे Upload होत आहेत...")
         Thread {
             try {
+                // Verify the active Supabase session and use its authoritative Auth UID.
+                // This prevents an outdated/mismatched Intent user_id from failing the RLS check.
+                val authUser = JSONObject(api("GET", "/auth/v1/user", null))
+                val authenticatedUserId = authUser.optString("id")
+                if (authenticatedUserId.isBlank()) {
+                    throw IOException("Login session मधून ग्राहक User ID मिळाला नाही. Logout करून पुन्हा Login करा.")
+                }
+                userId = authenticatedUserId
+
                 val applicationNo = "GAPP" + System.currentTimeMillis().toString()
                 val body = JSONObject()
-                    .put("customer_id", userId)
+                    .put("customer_id", authenticatedUserId)
                     .put("application_no", applicationNo)
                     .put("service_name", service)
                     .put("reference_no", reference)
