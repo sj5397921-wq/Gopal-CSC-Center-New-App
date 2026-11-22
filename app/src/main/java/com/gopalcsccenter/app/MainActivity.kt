@@ -114,40 +114,116 @@ class MainActivity : AppCompatActivity() {
     private fun showHome() {
         layout = createLayout()
         addTitle(layout, "GOPAL CSC CENTER")
-
         val subtitle = TextView(this).apply {
             text = "आपल्या सर्व डिजिटल सेवा एकाच ठिकाणी"
             textSize = 17f
             setTextColor(Color.DKGRAY)
             gravity = Gravity.CENTER
+            setPadding(0, 0, 0, 22)
         }
         layout.addView(subtitle)
-
+        addButton(layout, "ग्राहक लॉगिन") { showCustomerLogin() }
         addButton(layout, "Admin Login") { showAdminInfo() }
-        addButton(layout, "उपलब्ध सेवा") { showServices() }
-        addButton(layout, "ग्राहक / बिल इतिहास") { showBillHistory() }
-        addButton(layout, "ग्राहक पेमेंट रिमाइंडर") { showPaymentReminders() }
-        addButton(layout, "ग्राहक यादी / संपूर्ण इतिहास") { showCustomerDirectory() }
-        addButton(layout, "ग्राहक खाते उतारा (Customer Ledger)") { showCustomerLedger() }
-        addButton(layout, "अर्ज ट्रॅकिंग") { showApplicationTracking() }
-        addButton(layout, "दैनिक उत्पन्न अहवाल") { showDailyIncomeReport() }
-        addButton(layout, "मासिक उत्पन्न अहवाल") { showMonthlyIncomeReport() }
-        addButton(layout, "सेवानुसार उत्पन्न अहवाल") { showServiceIncomeReport() }
-        addButton(layout, "सूचना केंद्र") { showNotificationCenter() }
-        addButton(layout, "Document Checklist") { showDocumentChecklist() }
-        addButton(layout, "डेटा बॅकअप / Restore") { showBackupRestore() }
-        addButton(layout, "Document Scanner") {
-            showMessage("Document Scanner पुढील टप्प्यात जोडला जाईल.")
-        }
-        val homeScroll = ScrollView(this).apply {
+        setContentView(ScrollView(this).apply {
             isFillViewport = true
-            isVerticalScrollBarEnabled = true
             addView(layout, android.view.ViewGroup.LayoutParams(
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT,
                 android.view.ViewGroup.LayoutParams.WRAP_CONTENT
             ))
+        })
+    }
+
+    private fun customerAuthEmail(phone: String): String =
+        "customer-$phone@gopalcsccenter.app"
+
+    private fun showCustomerLogin() {
+        if (firebaseAuth.currentUser?.email?.startsWith("customer-") == true) {
+            showServices()
+            return
         }
-        setContentView(homeScroll)
+        val page = createLayout()
+        addTitle(page, "ग्राहक लॉगिन")
+        val phone = addField(page, "10 अंकी मोबाईल नंबर", InputType.TYPE_CLASS_PHONE)
+        val password = addField(page, "पासवर्ड", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
+        password.transformationMethod = android.text.method.PasswordTransformationMethod.getInstance()
+
+        addButton(page, "लॉगिन करा") {
+            val mobile = phone.text.toString().trim()
+            val pass = password.text.toString()
+            if (!mobile.matches(Regex("^[0-9]{10}$"))) {
+                phone.error = "मोबाईल नंबर 10 अंकी असावा"
+                return@addButton
+            }
+            if (pass.isBlank()) {
+                password.error = "पासवर्ड टाका"
+                return@addButton
+            }
+            firebaseAuth.signInWithEmailAndPassword(customerAuthEmail(mobile), pass)
+                .addOnCompleteListener(this) { task ->
+                    if (task.isSuccessful && firebaseAuth.currentUser?.email == customerAuthEmail(mobile)) {
+                        showMessage("ग्राहक लॉगिन यशस्वी.")
+                        showServices()
+                    } else {
+                        firebaseAuth.signOut()
+                        showMessage("लॉगिन अयशस्वी. मोबाईल नंबर आणि पासवर्ड तपासा.")
+                    }
+                }
+        }
+        addButton(page, "नवीन खाते तयार करा") { showCustomerRegistration() }
+        addButton(page, "मुख्य पानावर जा") { showHome() }
+        setContentView(ScrollView(this).apply { isFillViewport = true; addView(page) })
+    }
+
+    private fun showCustomerRegistration() {
+        val page = createLayout()
+        addTitle(page, "नवीन ग्राहक खाते")
+        val name = addField(page, "ग्राहकाचे पूर्ण नाव")
+        val phone = addField(page, "10 अंकी मोबाईल नंबर", InputType.TYPE_CLASS_PHONE)
+        val password = addField(page, "नवीन पासवर्ड (किमान 6 अक्षरे)")
+        password.transformationMethod = android.text.method.PasswordTransformationMethod.getInstance()
+        val confirm = addField(page, "पासवर्ड पुन्हा टाका")
+        confirm.transformationMethod = android.text.method.PasswordTransformationMethod.getInstance()
+
+        addButton(page, "खाते तयार करा") {
+            val fullName = name.text.toString().trim()
+            val mobile = phone.text.toString().trim()
+            val pass = password.text.toString()
+            val confirmPass = confirm.text.toString()
+            if (fullName.isBlank()) {
+                name.error = "पूर्ण नाव टाका"
+                return@addButton
+            }
+            if (!mobile.matches(Regex("^[0-9]{10}$"))) {
+                phone.error = "मोबाईल नंबर नेमका 10 अंकी असावा"
+                return@addButton
+            }
+            if (pass.length < 6) {
+                password.error = "पासवर्ड किमान 6 अक्षरांचा असावा"
+                return@addButton
+            }
+            if (pass != confirmPass) {
+                confirm.error = "दोन्ही पासवर्ड जुळत नाहीत"
+                return@addButton
+            }
+            firebaseAuth.createUserWithEmailAndPassword(customerAuthEmail(mobile), pass)
+                .addOnCompleteListener(this) { task ->
+                    if (task.isSuccessful) {
+                        val profile = com.google.firebase.auth.UserProfileChangeRequest.Builder()
+                            .setDisplayName(fullName).build()
+                        firebaseAuth.currentUser?.updateProfile(profile)?.addOnCompleteListener {
+                            showMessage("नवीन ग्राहक खाते तयार झाले.")
+                            showServices()
+                        } ?: run {
+                            showMessage("खाते तयार झाले; पुन्हा लॉगिन करा.")
+                            showCustomerLogin()
+                        }
+                    } else {
+                        showMessage("खाते तयार झाले नाही. हा मोबाईल नंबर आधी नोंदवलेला असू शकतो किंवा इंटरनेट तपासा.")
+                    }
+                }
+        }
+        addButton(page, "लॉगिन पानावर जा") { showCustomerLogin() }
+        setContentView(ScrollView(this).apply { isFillViewport = true; addView(page) })
     }
 
     private fun showServices() {
@@ -184,6 +260,11 @@ class MainActivity : AppCompatActivity() {
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
             )
         )
+        addButton(page, "ग्राहक लॉगआउट") {
+            firebaseAuth.signOut()
+            showMessage("ग्राहक लॉगआउट झाले.")
+            showHome()
+        }
         addButton(page, "मुख्य पानावर जा") { showHome() }
         setContentView(page)
     }
@@ -229,6 +310,13 @@ class MainActivity : AppCompatActivity() {
         val fields = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val customerName = addField(fields, "ग्राहकाचे पूर्ण नाव")
         val phone = addField(fields, "मोबाईल नंबर", InputType.TYPE_CLASS_PHONE)
+        val signedInCustomer = firebaseAuth.currentUser
+        if (signedInCustomer?.email?.startsWith("customer-") == true) {
+            customerName.setText(signedInCustomer.displayName.orEmpty())
+            phone.setText(signedInCustomer.email!!.removePrefix("customer-").substringBefore("@"))
+            phone.isEnabled = false
+            phone.isFocusable = false
+        }
         val fee = addField(fields, "सेवा शुल्क (₹) — Admin ने निश्चित केलेले", InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL)
         fee.setText(String.format(Locale.US, "%.2f", getServiceFee(service)))
         fee.isEnabled = false
