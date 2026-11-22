@@ -266,15 +266,38 @@ class CustomerPortalActivity : Activity() {
         val docs = getRequiredDocuments(service)
         if (docs.isEmpty()) addText(root, "आवश्यक कागदपत्रांची यादी उपलब्ध नाही.", 14f)
         docs.forEach { document ->
+            // प्रत्येक कागदपत्रासाठी स्वतंत्र ओळ आणि स्वतंत्र Upload बटण.
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(10, 8, 10, 8)
                 setBackgroundColor(Color.rgb(242, 246, 250))
             }
-            addText(card, "• $document", 15f, Color.BLACK)
-            selectedFiles[document]?.let { addText(card, "निवडले: ${displayName(it)}", 12f, Color.rgb(20, 120, 70)) }
-            addButton(card, if (selectedFiles.containsKey(document)) "फाइल बदला" else "＋ PDF / फोटो Upload करा") {
-                chooseNewFile(document)
+            val documentRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            val documentName = TextView(this).apply {
+                text = "• $document"
+                textSize = 15f
+                setTextColor(Color.BLACK)
+                setPadding(4, 8, 8, 8)
+            }
+            documentRow.addView(documentName, LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+            ))
+            val uploadButton = Button(this).apply {
+                text = if (selectedFiles.containsKey(document)) "फाइल बदला" else "Upload"
+                isAllCaps = false
+                textSize = 13f
+                setOnClickListener { chooseNewFile(document) }
+            }
+            documentRow.addView(uploadButton, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ))
+            card.addView(documentRow)
+            selectedFiles[document]?.let {
+                addText(card, "✓ निवडलेली फाइल: ${displayName(it)}", 12f, Color.rgb(20, 120, 70))
             }
             root.addView(card, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -332,10 +355,8 @@ class CustomerPortalActivity : Activity() {
     }
 
     private fun showServiceDetailsWithSelection(service: String) {
+        // पुन्हा स्क्रीन दाखवताना प्रत्येक फाइल तिच्याच कागदपत्राच्या ओळीत दिसेल.
         showServiceDetails(service)
-        selectedFiles.forEach { (type, uri) ->
-            addText(root, "निवडले: ${type} — ${displayName(uri)}", 12f, Color.rgb(20, 120, 70))
-        }
     }
 
     private fun submitApplication(service: String, reference: String, serviceFee: Double, paymentStatus: String) {
