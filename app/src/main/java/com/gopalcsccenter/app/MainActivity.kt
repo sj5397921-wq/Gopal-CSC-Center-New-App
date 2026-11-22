@@ -9,10 +9,14 @@ import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.UserProfileChangeRequest
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 
 class MainActivity : AppCompatActivity() {
 
     private val auth: FirebaseAuth by lazy { FirebaseAuth.getInstance() }
+    private val db: FirebaseFirestore by lazy { FirebaseFirestore.getInstance() }
+    private var serviceListener: ListenerRegistration? = null
     private val blue = Color.rgb(22, 91, 166)
     private val dark = Color.rgb(35, 48, 64)
 
@@ -467,6 +471,70 @@ class MainActivity : AppCompatActivity() {
         }
         addAction(page, t("home")) { showHome() }
         setContentView(page)
+    }
+
+
+    private fun initialServiceList(): MutableList<Map<String, String>> = mutableListOf(
+        mapOf("mr" to "आधार कार्ड सेवा", "en" to "Aadhaar Card Services", "hi" to "आधार कार्ड सेवा"),
+        mapOf("mr" to "पॅन कार्ड सेवा", "en" to "PAN Card Services", "hi" to "पैन कार्ड सेवा"),
+        mapOf("mr" to "MahaDBT अर्ज", "en" to "MahaDBT Application", "hi" to "MahaDBT आवेदन"),
+        mapOf("mr" to "जात प्रमाणपत्र", "en" to "Caste Certificate", "hi" to "जाति प्रमाणपत्र"),
+        mapOf("mr" to "उत्पन्न प्रमाणपत्र", "en" to "Income Certificate", "hi" to "आय प्रमाणपत्र"),
+        mapOf("mr" to "रहिवासी प्रमाणपत्र", "en" to "Residence Certificate", "hi" to "निवास प्रमाणपत्र"),
+        mapOf("mr" to "रेल्वे तिकीट बुकिंग", "en" to "Railway Ticket Booking", "hi" to "रेलवे टिकट बुकिंग"),
+        mapOf("mr" to "बस तिकीट बुकिंग", "en" to "Bus Ticket Booking", "hi" to "बस टिकट बुकिंग"),
+        mapOf("mr" to "विमान तिकीट बुकिंग", "en" to "Flight Ticket Booking", "hi" to "हवाई टिकट बुकिंग"),
+        mapOf("mr" to "ऑनलाइन फॉर्म", "en" to "Online Forms", "hi" to "ऑनलाइन फॉर्म"),
+        mapOf("mr" to "प्रिंट आणि झेरॉक्स", "en" to "Print & Xerox", "hi" to "प्रिंट और ज़ेरॉक्स")
+    )
+
+    private fun decodeServiceList(data: Map<String, Any>?): MutableList<Map<String, String>> {
+        val raw = data?.get("services") as? List<*> ?: return initialServiceList()
+        return raw.mapNotNull { entry ->
+            val item = entry as? Map<*, *> ?: return@mapNotNull null
+            val mr = item["mr"]?.toString()?.trim().orEmpty()
+            if (mr.isBlank()) return@mapNotNull null
+            mapOf("mr" to mr, "en" to (item["en"]?.toString() ?: mr), "hi" to (item["hi"]?.toString() ?: mr))
+        }.toMutableList()
+    }
+
+    private fun serviceLabel(item: Map<String, String>): String =
+        item[when (languageIndex) { 1 -> "en"; 2 -> "hi"; else -> "mr" }] ?: item["mr"].orEmpty()
+
+    private fun renderServiceRow(parent: LinearLayout, item: Map<String, String>, index: Int, deleteAction: (() -> Unit)? = null) {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(12), dp(10), dp(8), dp(10))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(Color.rgb(246, 248, 253))
+                cornerRadius = dp(10).toFloat()
+                setStroke(dp(1), Color.rgb(230, 234, 243))
+            }
+        }
+        row.addView(TextView(this).apply {
+            text = "\${index + 1}.  \${serviceLabel(item)}"
+            textSize = 16f
+            setTextColor(Color.rgb(35, 48, 64))
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        if (deleteAction != null) {
+            row.addView(TextView(this).apply {
+                text = "हटवा"
+                textSize = 13f
+                gravity = Gravity.CENTER
+                setTextColor(Color.WHITE)
+                setPadding(dp(12), dp(9), dp(12), dp(9))
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(Color.rgb(198, 55, 65))
+                    cornerRadius = dp(9).toFloat()
+                }
+                setOnClickListener { deleteAction() }
+            })
+        }
+        parent.addView(row, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { setMargins(0, dp(4), 0, dp(4)) })
     }
 
     private fun showCustomerWelcome() {
