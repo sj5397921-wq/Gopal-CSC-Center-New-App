@@ -203,7 +203,13 @@ class MainActivity : AppCompatActivity() {
                 if (result.success && !result.accessToken.isNullOrBlank()) {
                     customerAccessToken = result.accessToken
                     customerUserId = result.userId
-                    showCustomerPortal()
+                    val portalIntent = Intent(this@MainActivity, CustomerPortalActivity::class.java).apply {
+                        putExtra("access_token", result.accessToken)
+                        putExtra("user_id", result.userId)
+                        putExtra("phone", phone.text.toString().trim())
+                        putExtra("full_name", name.text.toString().trim())
+                    }
+                    startActivity(portalIntent)
                 } else {
                     showMessage(result.message)
                 }
@@ -257,28 +263,6 @@ class MainActivity : AppCompatActivity() {
             name.visibility = android.view.View.GONE
             registerButton.text = "नवीन खाते तयार करा"
             status.text = ""
-        }
-        addButton(page, "मुख्य पानावर जा") { showHome() }
-        setContentView(page)
-    }
-
-    private fun showCustomerPortal() {
-        if (customerAccessToken.isNullOrBlank() || customerUserId.isNullOrBlank()) {
-            showCustomerAccount()
-            return
-        }
-        val page = createLayout()
-        addTitle(page, "ग्राहक खाते")
-        page.addView(TextView(this).apply {
-            text = "Login यशस्वी. ग्राहक खाते सुरक्षितपणे जोडले गेले आहे. अर्ज आणि कागदपत्रांचे क्लाउड सिंक पुढील टप्प्यात जोडले जाईल."
-            textSize = 16f
-            setTextColor(Color.DKGRAY)
-            setPadding(8, 12, 8, 20)
-        })
-        addButton(page, "Logout") {
-            customerAccessToken = null
-            customerUserId = null
-            showCustomerAccount()
         }
         addButton(page, "मुख्य पानावर जा") { showHome() }
         setContentView(page)
