@@ -116,7 +116,6 @@ class MainActivity : AppCompatActivity() {
 
         addButton(layout, "ग्राहक Login / नवीन खाते") { showCustomerAccount() }
         addButton(layout, "Admin Login") { showAdminInfo() }
-        addButton(layout, "उपलब्ध सेवा") { showServices() }
         addButton(layout, "ग्राहक / बिल इतिहास") { showBillHistory() }
         addButton(layout, "ग्राहक पेमेंट रिमाइंडर") { showPaymentReminders() }
         addButton(layout, "ग्राहक यादी / संपूर्ण इतिहास") { showCustomerDirectory() }
