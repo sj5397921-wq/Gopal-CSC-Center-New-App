@@ -21,6 +21,10 @@
         </provider>
 
         <activity
+            android:name=".CustomerPortalActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".MainActivity"
             android:exported="true">
 
