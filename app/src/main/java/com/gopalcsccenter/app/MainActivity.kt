@@ -82,6 +82,7 @@ class MainActivity : AppCompatActivity() {
             "back_login" to listOf("Login पानावर जा", "Back to Login", "लॉगिन पृष्ठ पर जाएँ"),
             "admin_id" to listOf("Admin ID", "Admin ID", "एडमिन आईडी"),
             "admin_id_error" to listOf("Admin ID टाका", "Enter Admin ID", "एडमिन आईडी दर्ज करें"),
+            "admin_id_invalid" to listOf("Admin ID नेमका 12 अंकी आणि अधिकृत असावा", "Enter the authorized 12-digit Admin ID", "सही 12 अंकों की एडमिन आईडी दर्ज करें"),
             "admin_error" to listOf("Admin ID किंवा पासवर्ड चुकीचा आहे.", "Incorrect Admin ID or password.", "एडमिन आईडी या पासवर्ड गलत है।"),
             "customer_success" to listOf("ग्राहक लॉगिन यशस्वी", "Customer Login Successful", "ग्राहक लॉगिन सफल"),
             "hello" to listOf("नमस्कार", "Hello", "नमस्ते"),
@@ -447,12 +448,13 @@ class MainActivity : AppCompatActivity() {
         recordScreen("admin_login")
         val page = basePage()
         addHeading(page, t("admin_login"), t("admin_sub"))
-        val adminId = addField(page, t("admin_id"), InputType.TYPE_CLASS_NUMBER)
+        val adminId = addField(page, t("admin_id"), InputType.TYPE_CLASS_NUMBER, 12)
         val password = addField(page, t("password"), InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
         addAction(page, t("admin_button")) {
             val id = adminId.text.toString().trim()
             val pass = password.text.toString()
             if (id.isBlank()) adminId.error = t("admin_id_error")
+            else if (id.length != 12 || id != "636657750019") adminId.error = t("admin_id_invalid")
             else if (pass.isBlank()) password.error = t("password_error")
             else auth.signInWithEmailAndPassword("${id}@gopalcsccenter.app", pass)
                 .addOnCompleteListener { task ->
