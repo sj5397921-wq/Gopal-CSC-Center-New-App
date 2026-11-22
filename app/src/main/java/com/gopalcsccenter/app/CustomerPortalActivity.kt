@@ -56,16 +56,21 @@ class CustomerPortalActivity : Activity() {
         // Use the exact checklist saved by the Admin dashboard's Document Checklist screen.
         val prefs = getSharedPreferences("gopal_csc_checklists", MODE_PRIVATE)
         val saved = prefs.getString("documents_" + service.hashCode(), null)
-        if (!saved.isNullOrBlank()) {
+        val documents = if (!saved.isNullOrBlank()) {
             try {
                 val items = JSONArray(saved)
-                return List(items.length()) { index -> items.optString(index) }
+                List(items.length()) { index -> items.optString(index) }
                     .filter { it.isNotBlank() }
             } catch (_: Exception) {
-                // Fall back to the app's default checklist if saved data is invalid.
+                defaultRequiredDocuments[service].orEmpty()
             }
+        } else {
+            defaultRequiredDocuments[service].orEmpty()
         }
-        return defaultRequiredDocuments[service].orEmpty()
+        // Admin-selected checklist items are the exact requirements shown to customers.
+        val checked = prefs.getStringSet("checked_" + service.hashCode(), emptySet())
+            ?.toSet().orEmpty()
+        return documents.filter { checked.contains(it) }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
