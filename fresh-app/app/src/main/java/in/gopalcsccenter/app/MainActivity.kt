@@ -76,6 +76,9 @@ class MainActivity : Activity() {
         addAction(root, "लॉगिन", true) {
             Toast.makeText(this, "लॉगिन व्यवस्था पुढील टप्प्यात सुरक्षितपणे जोडली जाईल.", Toast.LENGTH_LONG).show()
         }
+        if (customer) {
+            addText(root, "खाते तयार करा", 16f, blue, 14, true)
+        }
         addAction(root, "मागे जा", false) { showHome() }
         addText(root, "टीप: ही पहिली स्क्रीन आवृत्ती आहे. प्रत्यक्ष खाते पडताळणी पुढील टप्प्यात जोडली जाईल.", 13f, Color.DKGRAY, 20)
         setContentView(root)
