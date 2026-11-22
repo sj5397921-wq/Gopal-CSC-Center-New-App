@@ -73,7 +73,19 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         languageIndex = getSharedPreferences("gopal_settings", MODE_PRIVATE).getInt("language", 0).coerceIn(0, 2)
-        showHome()
+
+        // Firebase keeps the signed-in session across app restarts.
+        // Restore the correct screen instead of showing the login home again.
+        val signedInUser = auth.currentUser
+        if (signedInUser != null) {
+            if (signedInUser.email == "636657750019@gopalcsccenter.app") {
+                showAdminWelcome()
+            } else {
+                showCustomerWelcome()
+            }
+        } else {
+            showHome()
+        }
     }
 
     private fun basePage(): LinearLayout = LinearLayout(this).apply {
