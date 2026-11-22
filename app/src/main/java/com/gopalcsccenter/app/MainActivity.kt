@@ -25,14 +25,18 @@ class MainActivity : AppCompatActivity() {
         orientation = LinearLayout.VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
         setPadding(24, 28, 24, 24)
-        setBackgroundColor(Color.rgb(247, 250, 255))
+        background = android.graphics.drawable.GradientDrawable(
+            android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+            intArrayOf(Color.rgb(12, 74, 145), Color.rgb(83, 69, 174), Color.rgb(126, 82, 196))
+        )
+
     }
 
     private fun addHeading(parent: LinearLayout, title: String, subtitle: String? = null) {
         parent.addView(TextView(this).apply {
             text = title
             textSize = 26f
-            setTextColor(blue)
+            setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
             setPadding(0, 24, 0, 10)
             setTypeface(null, android.graphics.Typeface.BOLD)
@@ -41,7 +45,7 @@ class MainActivity : AppCompatActivity() {
             parent.addView(TextView(this).apply {
                 text = subtitle
                 textSize = 15f
-                setTextColor(Color.DKGRAY)
+                setTextColor(Color.rgb(235, 238, 255))
                 gravity = Gravity.CENTER
                 setPadding(0, 0, 0, 22)
             })
@@ -60,6 +64,13 @@ class MainActivity : AppCompatActivity() {
             textSize = 17f
             setSingleLine(true)
             setPadding(16, 12, 16, 12)
+            setTextColor(Color.rgb(35, 48, 64))
+            setHintTextColor(Color.rgb(120, 130, 150))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(Color.WHITE)
+                cornerRadius = dp(12).toFloat()
+                setStroke(dp(1), Color.rgb(220, 226, 240))
+            }
             if (maxLength != null) filters = arrayOf(InputFilter.LengthFilter(maxLength))
         }
         parent.addView(field, LinearLayout.LayoutParams(
@@ -74,6 +85,8 @@ class MainActivity : AppCompatActivity() {
             text = label
             textSize = 16f
             isAllCaps = false
+            setTextColor(Color.WHITE)
+            backgroundTintList = android.content.res.ColorStateList.valueOf(Color.rgb(37, 112, 205))
             setOnClickListener { action() }
         }, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
