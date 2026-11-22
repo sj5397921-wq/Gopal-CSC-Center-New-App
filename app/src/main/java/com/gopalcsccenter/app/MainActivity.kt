@@ -436,7 +436,7 @@ class MainActivity : AppCompatActivity() {
         val receipt = """
             GOPAL CSC CENTER
             ------------------------------
-            बिल क्रमांक: $billNumber
+            कोटेशन क्रमांक: $billNumber
             अर्ज क्रमांक: GAPP${billNumber.takeLast(8)}
             अर्ज स्थिती: अर्ज प्राप्त
             दिनांक: $date
@@ -444,7 +444,7 @@ class MainActivity : AppCompatActivity() {
             मोबाईल: $phone
             सेवा: $service
             संदर्भ क्रमांक: ${reference.ifBlank { "नाही" }}
-            सेवा शुल्क: ₹$amountText
+            अंदाजित सेवा शुल्क: ₹$amountText
             पेमेंट स्थिती: $paymentStatus
             संचालक: Suresh Jadhav
             मोबाईल: 7875277904
@@ -2016,7 +2016,7 @@ class MainActivity : AppCompatActivity() {
         pendingPdfFile = file
         val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE); type = "application/pdf"
-            putExtra(Intent.EXTRA_TITLE, "Gopal-CSC-$billNumber.pdf")
+            putExtra(Intent.EXTRA_TITLE, "Gopal-CSC-Quotation-$billNumber.pdf")
         }
         @Suppress("DEPRECATION")
         startActivityForResult(intent, createPdfRequest)
