@@ -557,7 +557,83 @@ class MainActivity : AppCompatActivity() {
         recordScreen("admin_welcome")
         val page = basePage()
         addHeading(page, t("admin_success"), t("admin_success_sub"))
-        addAction(page, t("logout")) { auth.signOut(); showHome() }
-        setContentView(page)
+
+        val services = listOf(
+            listOf("आधार कार्ड सेवा", "Aadhaar Card Services", "आधार कार्ड सेवा"),
+            listOf("पॅन कार्ड सेवा", "PAN Card Services", "पैन कार्ड सेवा"),
+            listOf("MahaDBT अर्ज", "MahaDBT Application", "MahaDBT आवेदन"),
+            listOf("जात प्रमाणपत्र", "Caste Certificate", "जाति प्रमाणपत्र"),
+            listOf("उत्पन्न प्रमाणपत्र", "Income Certificate", "आय प्रमाणपत्र"),
+            listOf("रहिवासी प्रमाणपत्र", "Residence Certificate", "निवास प्रमाणपत्र"),
+            listOf("रेल्वे तिकीट बुकिंग", "Railway Ticket Booking", "रेलवे टिकट बुकिंग"),
+            listOf("बस तिकीट बुकिंग", "Bus Ticket Booking", "बस टिकट बुकिंग"),
+            listOf("विमान तिकीट बुकिंग", "Flight Ticket Booking", "हवाई टिकट बुकिंग"),
+            listOf("ऑनलाइन फॉर्म", "Online Forms", "ऑनलाइन फॉर्म"),
+            listOf("प्रिंट आणि झेरॉक्स", "Print & Xerox", "प्रिंट और ज़ेरॉक्स")
+        )
+
+        val folder = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), dp(14), dp(14), dp(14))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(Color.WHITE)
+                cornerRadius = dp(18).toFloat()
+                setStroke(dp(1), Color.rgb(220, 226, 240))
+            }
+            elevation = dp(3).toFloat()
+        }
+
+        val folderHeader = TextView(this).apply {
+            text = "📁  उपलब्ध सेवा                         ▼"
+            textSize = 19f
+            setTextColor(Color.rgb(35, 48, 64))
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setPadding(dp(10), dp(16), dp(10), dp(16))
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        folder.addView(folderHeader, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ))
+
+        val serviceItems = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = android.view.View.GONE
+        }
+
+        services.forEachIndexed { index, names ->
+            serviceItems.addView(TextView(this).apply {
+                text = "${index + 1}.  ${names[languageIndex]}"
+                textSize = 16f
+                setTextColor(Color.rgb(35, 48, 64))
+                setPadding(dp(14), dp(13), dp(14), dp(13))
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(Color.rgb(246, 248, 253))
+                    cornerRadius = dp(10).toFloat()
+                    setStroke(dp(1), Color.rgb(230, 234, 243))
+                }
+            }, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(0, dp(4), 0, dp(4)) })
+        }
+
+        folder.addView(serviceItems)
+        folderHeader.setOnClickListener {
+            val isExpanded = serviceItems.visibility == android.view.View.VISIBLE
+            serviceItems.visibility = if (isExpanded) android.view.View.GONE else android.view.View.VISIBLE
+            folderHeader.text = if (isExpanded) "📁  उपलब्ध सेवा                         ▼" else "📂  उपलब्ध सेवा                         ▲"
+        }
+
+        page.addView(folder, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { setMargins(0, dp(10), 0, dp(18)) })
+
+        addAction(page, t("logout")) { auth.signOut(); screenHistory.clear(); showHome() }
+        setContentView(ScrollView(this).apply {
+            isFillViewport = true
+            addView(page)
+        })
     }
 }
