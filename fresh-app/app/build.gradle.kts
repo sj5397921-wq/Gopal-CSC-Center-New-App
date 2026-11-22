@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "in.gopalcsccenter.app"
+    namespace = "com.gopalcsccenter.app"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "in.gopalcsccenter.app"
+        applicationId = "com.gopalcsccenter.app"
         minSdk = 23
         targetSdk = 35
         versionCode = 1
