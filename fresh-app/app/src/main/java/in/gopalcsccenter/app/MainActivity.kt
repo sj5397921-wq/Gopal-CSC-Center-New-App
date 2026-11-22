@@ -1,11 +1,10 @@
-package in.gopalcsccenter.app
+package com.gopalcsccenter.app
 
 import android.app.Activity
 import android.os.Bundle
 import android.graphics.Color
 import android.graphics.Typeface
 import android.view.Gravity
-import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -24,19 +23,18 @@ class MainActivity : Activity() {
     }
 
     private fun baseScreen(): LinearLayout {
-        val page = LinearLayout(this).apply {
+        return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
             setPadding(dp(24), dp(30), dp(24), dp(24))
             setBackgroundColor(Color.rgb(246, 249, 253))
         }
-        return page
     }
 
     private fun showHome() {
         root = baseScreen()
         val header = TextView(this).apply {
-            text = "GOPAL CSC CENTER"
+            text = "GOPAL CSC CENTER 2"
             textSize = 25f
             setTextColor(navy)
             typeface = Typeface.DEFAULT_BOLD
@@ -45,10 +43,8 @@ class MainActivity : Activity() {
         root.addView(header, matchWrap())
         addText(root, "आपल्या डिजिटल सेवा केंद्रात स्वागत आहे", 16f, ink, 24)
         addText(root, "कृपया पुढे जाण्यासाठी लॉगिन निवडा", 14f, Color.DKGRAY, 34)
-
         addAction(root, "ग्राहक लॉगिन", true) { showLogin(customer = true) }
         addAction(root, "Admin लॉगिन", false) { showLogin(customer = false) }
-
         addText(root, "सुरक्षित आणि सोपी सेवा", 13f, Color.GRAY, 18)
         setContentView(root)
     }
@@ -56,19 +52,20 @@ class MainActivity : Activity() {
     private fun showLogin(customer: Boolean) {
         root = baseScreen()
         val title = if (customer) "ग्राहक लॉगिन" else "Admin लॉगिन"
-        addText(root, "GOPAL CSC CENTER", 22f, navy, 12, true)
+        addText(root, "GOPAL CSC CENTER 2", 22f, navy, 12, true)
         addText(root, title, 21f, blue, 26, true)
 
         val user = EditText(this).apply {
             textSize = 16f
-            singleLine = true
+            setSingleLine(true)
             hint = if (customer) "मोबाईल नंबर" else "Admin Login ID"
             inputType = if (customer) 3 else 1
         }
         root.addView(user, matchWrap(54))
+
         val password = EditText(this).apply {
             textSize = 16f
-            singleLine = true
+            setSingleLine(true)
             hint = "पासवर्ड"
             inputType = 129
         }
@@ -80,7 +77,7 @@ class MainActivity : Activity() {
             Toast.makeText(this, "लॉगिन व्यवस्था पुढील टप्प्यात सुरक्षितपणे जोडली जाईल.", Toast.LENGTH_LONG).show()
         }
         addAction(root, "मागे जा", false) { showHome() }
-        addText(root, "टीप: सध्या ही पहिली स्क्रीन आवृत्ती आहे. प्रत्यक्ष खाते पडताळणी अजून जोडलेली नाही.", 13f, Color.DKGRAY, 20)
+        addText(root, "टीप: ही पहिली स्क्रीन आवृत्ती आहे. प्रत्यक्ष खाते पडताळणी पुढील टप्प्यात जोडली जाईल.", 13f, Color.DKGRAY, 20)
         setContentView(root)
     }
 
