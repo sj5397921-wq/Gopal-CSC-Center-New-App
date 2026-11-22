@@ -539,23 +539,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun showCustomerWelcome() {
         recordScreen("customer_welcome")
+        serviceListener?.remove()
         val page = basePage()
-        addHeading(page, t("customer_success"), "${t("hello")}, ${auth.currentUser?.displayName ?: t("customer")}")
-
-        val services = listOf(
-            listOf("आधार कार्ड सेवा", "Aadhaar Card Services", "आधार कार्ड सेवा"),
-            listOf("पॅन कार्ड सेवा", "PAN Card Services", "पैन कार्ड सेवा"),
-            listOf("MahaDBT अर्ज", "MahaDBT Application", "MahaDBT आवेदन"),
-            listOf("जात प्रमाणपत्र", "Caste Certificate", "जाति प्रमाणपत्र"),
-            listOf("उत्पन्न प्रमाणपत्र", "Income Certificate", "आय प्रमाणपत्र"),
-            listOf("रहिवासी प्रमाणपत्र", "Residence Certificate", "निवास प्रमाणपत्र"),
-            listOf("रेल्वे तिकीट बुकिंग", "Railway Ticket Booking", "रेलवे टिकट बुकिंग"),
-            listOf("बस तिकीट बुकिंग", "Bus Ticket Booking", "बस टिकट बुकिंग"),
-            listOf("विमान तिकीट बुकिंग", "Flight Ticket Booking", "हवाई टिकट बुकिंग"),
-            listOf("ऑनलाइन फॉर्म", "Online Forms", "ऑनलाइन फॉर्म"),
-            listOf("प्रिंट आणि झेरॉक्स", "Print & Xerox", "प्रिंट और ज़ेरॉक्स")
-        )
-
+        addHeading(page, t("customer_success"), "\${t("hello")}, \${auth.currentUser?.displayName ?: t("customer")}")
         val folder = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(14), dp(14), dp(14), dp(14))
@@ -566,80 +552,59 @@ class MainActivity : AppCompatActivity() {
             }
             elevation = dp(3).toFloat()
         }
-
-        val folderHeader = TextView(this).apply {
+        val header = TextView(this).apply {
             text = "📁  उपलब्ध सुविधा                         ▼"
             textSize = 19f
             setTextColor(Color.rgb(35, 48, 64))
             setTypeface(null, android.graphics.Typeface.BOLD)
             setPadding(dp(10), dp(16), dp(10), dp(16))
-            gravity = Gravity.CENTER_VERTICAL
         }
-        folder.addView(folderHeader, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ))
-
-        val serviceItems = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            visibility = android.view.View.GONE
+        val items = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = android.view.View.GONE }
+        folder.addView(header)
+        folder.addView(items)
+        header.setOnClickListener {
+            val open = items.visibility != android.view.View.VISIBLE
+            items.visibility = if (open) android.view.View.VISIBLE else android.view.View.GONE
+            header.text = if (open) "📂  उपलब्ध सुविधा                         ▲" else "📁  उपलब्ध सुविधा                         ▼"
         }
-
-        services.forEachIndexed { index, names ->
-            serviceItems.addView(TextView(this).apply {
-                text = "${index + 1}.  ${names[languageIndex]}"
-                textSize = 16f
-                setTextColor(Color.rgb(35, 48, 64))
-                setPadding(dp(14), dp(13), dp(14), dp(13))
-                background = android.graphics.drawable.GradientDrawable().apply {
-                    setColor(Color.rgb(246, 248, 253))
-                    cornerRadius = dp(10).toFloat()
-                    setStroke(dp(1), Color.rgb(230, 234, 243))
-                }
-            }, LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { setMargins(0, dp(4), 0, dp(4)) })
-        }
-
-        folder.addView(serviceItems)
-        folderHeader.setOnClickListener {
-            val isExpanded = serviceItems.visibility == android.view.View.VISIBLE
-            serviceItems.visibility = if (isExpanded) android.view.View.GONE else android.view.View.VISIBLE
-            folderHeader.text = if (isExpanded) "📁  उपलब्ध सुविधा                         ▼" else "📂  उपलब्ध सुविधा                         ▲"
-        }
-
         page.addView(folder, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply { setMargins(0, dp(10), 0, dp(18)) })
 
-        addAction(page, t("logout")) { auth.signOut(); screenHistory.clear(); showHome() }
-        setContentView(ScrollView(this).apply {
-            isFillViewport = true
-            addView(page)
-        })
+        serviceListener = db.collection("app_config").document("services")
+            .addSnapshotListener { snapshot, error ->
+                items.removeAllViews()
+                if (error != null) {
+                    items.addView(TextView(this).apply {
+                        text = "सेवा यादी मिळवता आली नाही. इंटरनेट तपासा."
+                        setTextColor(Color.RED)
+                    })
+                } else {
+                    val list = decodeServiceList(snapshot?.data)
+                    if (snapshot == null || !snapshot.exists() || list.isEmpty()) {
+                        items.addView(TextView(this).apply {
+                            text = "सध्या कोणतीही सेवा उपलब्ध नाही."
+                            setTextColor(dark)
+                            setPadding(dp(12), dp(12), dp(12), dp(12))
+                        })
+                    } else list.forEachIndexed { index, service -> renderServiceRow(items, service, index) }
+                }
+            }
+        addAction(page, t("logout")) {
+            serviceListener?.remove()
+            serviceListener = null
+            auth.signOut()
+            screenHistory.clear()
+            showHome()
+        }
+        setContentView(ScrollView(this).apply { isFillViewport = true; addView(page) })
     }
 
     private fun showAdminWelcome() {
         recordScreen("admin_welcome")
+        serviceListener?.remove()
         val page = basePage()
-        addHeading(page, t("admin_success"), t("admin_success_sub"))
-
-        val services = listOf(
-            listOf("आधार कार्ड सेवा", "Aadhaar Card Services", "आधार कार्ड सेवा"),
-            listOf("पॅन कार्ड सेवा", "PAN Card Services", "पैन कार्ड सेवा"),
-            listOf("MahaDBT अर्ज", "MahaDBT Application", "MahaDBT आवेदन"),
-            listOf("जात प्रमाणपत्र", "Caste Certificate", "जाति प्रमाणपत्र"),
-            listOf("उत्पन्न प्रमाणपत्र", "Income Certificate", "आय प्रमाणपत्र"),
-            listOf("रहिवासी प्रमाणपत्र", "Residence Certificate", "निवास प्रमाणपत्र"),
-            listOf("रेल्वे तिकीट बुकिंग", "Railway Ticket Booking", "रेलवे टिकट बुकिंग"),
-            listOf("बस तिकीट बुकिंग", "Bus Ticket Booking", "बस टिकट बुकिंग"),
-            listOf("विमान तिकीट बुकिंग", "Flight Ticket Booking", "हवाई टिकट बुकिंग"),
-            listOf("ऑनलाइन फॉर्म", "Online Forms", "ऑनलाइन फॉर्म"),
-            listOf("प्रिंट आणि झेरॉक्स", "Print & Xerox", "प्रिंट और ज़ेरॉक्स")
-        )
-
+        addHeading(page, t("admin_success"), "सेवा व्यवस्थापन")
         val folder = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(14), dp(14), dp(14), dp(14))
@@ -650,58 +615,100 @@ class MainActivity : AppCompatActivity() {
             }
             elevation = dp(3).toFloat()
         }
-
-        val folderHeader = TextView(this).apply {
+        val header = TextView(this).apply {
             text = "📁  उपलब्ध सेवा                         ▼"
             textSize = 19f
             setTextColor(Color.rgb(35, 48, 64))
             setTypeface(null, android.graphics.Typeface.BOLD)
             setPadding(dp(10), dp(16), dp(10), dp(16))
-            gravity = Gravity.CENTER_VERTICAL
         }
-        folder.addView(folderHeader, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ))
-
-        val serviceItems = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            visibility = android.view.View.GONE
+        val items = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        folder.addView(header)
+        folder.addView(items)
+        header.setOnClickListener {
+            val open = items.visibility != android.view.View.VISIBLE
+            items.visibility = if (open) android.view.View.VISIBLE else android.view.View.GONE
+            header.text = if (open) "📂  उपलब्ध सेवा                         ▲" else "📁  उपलब्ध सेवा                         ▼"
         }
-
-        services.forEachIndexed { index, names ->
-            serviceItems.addView(TextView(this).apply {
-                text = "${index + 1}.  ${names[languageIndex]}"
-                textSize = 16f
-                setTextColor(Color.rgb(35, 48, 64))
-                setPadding(dp(14), dp(13), dp(14), dp(13))
-                background = android.graphics.drawable.GradientDrawable().apply {
-                    setColor(Color.rgb(246, 248, 253))
-                    cornerRadius = dp(10).toFloat()
-                    setStroke(dp(1), Color.rgb(230, 234, 243))
-                }
-            }, LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { setMargins(0, dp(4), 0, dp(4)) })
-        }
-
-        folder.addView(serviceItems)
-        folderHeader.setOnClickListener {
-            val isExpanded = serviceItems.visibility == android.view.View.VISIBLE
-            serviceItems.visibility = if (isExpanded) android.view.View.GONE else android.view.View.VISIBLE
-            folderHeader.text = if (isExpanded) "📁  उपलब्ध सेवा                         ▼" else "📂  उपलब्ध सेवा                         ▲"
-        }
-
         page.addView(folder, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply { setMargins(0, dp(10), 0, dp(18)) })
 
-        addAction(page, t("logout")) { auth.signOut(); screenHistory.clear(); showHome() }
-        setContentView(ScrollView(this).apply {
-            isFillViewport = true
-            addView(page)
-        })
+        val newService = addField(page, "नवीन सेवेचे नाव टाका")
+        addAction(page, "＋ सेवा जोडा") {
+            val label = newService.text.toString().trim()
+            if (label.isBlank()) {
+                newService.error = "सेवेचे नाव टाका"
+            } else {
+                val ref = db.collection("app_config").document("services")
+                ref.get().addOnSuccessListener { snap ->
+                    val list = if (snap.exists()) decodeServiceList(snap.data) else initialServiceList()
+                    if (list.any { it["mr"].equals(label, ignoreCase = true) }) {
+                        newService.error = "ही सेवा आधीपासून आहे"
+                    } else {
+                        list.add(mapOf("mr" to label, "en" to label, "hi" to label))
+                        ref.set(mapOf("services" to list))
+                            .addOnSuccessListener {
+                                newService.text.clear()
+                                Toast.makeText(this, "सेवा जोडली", Toast.LENGTH_SHORT).show()
+                            }
+                            .addOnFailureListener {
+                                Toast.makeText(this, "सेवा जोडता आली नाही. Firestore Rules तपासा.", Toast.LENGTH_LONG).show()
+                            }
+                    }
+                }.addOnFailureListener {
+                    Toast.makeText(this, "डेटाबेसशी संपर्क झाला नाही.", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+
+        val ref = db.collection("app_config").document("services")
+        serviceListener = ref.addSnapshotListener { snapshot, error ->
+            items.removeAllViews()
+            if (error != null) {
+                items.addView(TextView(this).apply {
+                    text = "सेवा लोड करता आली नाही. Firestore Rules तपासा."
+                    setTextColor(Color.RED)
+                })
+            } else if (snapshot != null && !snapshot.exists()) {
+                ref.set(mapOf("services" to initialServiceList()))
+                    .addOnFailureListener {
+                        Toast.makeText(this, "प्रारंभिक सेवा यादी जतन झाली नाही. Firestore Rules तपासा.", Toast.LENGTH_LONG).show()
+                    }
+            } else {
+                val list = decodeServiceList(snapshot?.data)
+                if (list.isEmpty()) {
+                    items.addView(TextView(this).apply {
+                        text = "सध्या कोणतीही सेवा नाही. नवीन सेवा जोडा."
+                        setTextColor(dark)
+                        setPadding(dp(10), dp(12), dp(10), dp(12))
+                    })
+                }
+                list.forEachIndexed { index, service ->
+                    renderServiceRow(items, service, index) {
+                        android.app.AlertDialog.Builder(this)
+                            .setTitle("सेवा हटवा")
+                            .setMessage("‘\${serviceLabel(service)}’ ही सेवा हटवायची आहे? ग्राहकांच्या यादीतूनही हटवली जाईल.")
+                            .setNegativeButton("नाही", null)
+                            .setPositiveButton("होय") { _, _ ->
+                                val updated = list.toMutableList().apply { removeAt(index) }
+                                ref.set(mapOf("services" to updated))
+                                    .addOnFailureListener {
+                                        Toast.makeText(this, "सेवा हटवता आली नाही. Firestore Rules तपासा.", Toast.LENGTH_LONG).show()
+                                    }
+                            }.show()
+                    }
+                }
+            }
+        }
+
+        addAction(page, t("logout")) {
+            serviceListener?.remove()
+            serviceListener = null
+            auth.signOut()
+            screenHistory.clear()
+            showHome()
+        }
+        setContentView(ScrollView(this).apply { isFillViewport = true; addView(page) })
     }
 }
