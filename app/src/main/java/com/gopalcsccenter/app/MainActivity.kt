@@ -237,7 +237,7 @@ class MainActivity : AppCompatActivity() {
         languageBar.addView(TextView(this).apply {
             text = "Language / भाषा"
             textSize = 11f
-            setTextColor(Color.rgb(235, 238, 255))
+            setTextColor(Color.rgb(45, 57, 88))
             gravity = Gravity.CENTER_VERTICAL
             setPadding(0, 0, dp(7), 0)
         })
@@ -247,9 +247,9 @@ class MainActivity : AppCompatActivity() {
                 textSize = 11f
                 gravity = Gravity.CENTER
                 setPadding(dp(9), dp(7), dp(9), dp(7))
-                setTextColor(if (languageIndex == index) Color.rgb(31, 65, 130) else Color.WHITE)
+                setTextColor(if (languageIndex == index) Color.WHITE else Color.rgb(45, 57, 88))
                 background = android.graphics.drawable.GradientDrawable().apply {
-                    setColor(if (languageIndex == index) Color.WHITE else Color.argb(55, 255, 255, 255))
+                    setColor(if (languageIndex == index) Color.rgb(37, 92, 177) else Color.rgb(230, 235, 248))
                     cornerRadius = dp(14).toFloat()
                 }
                 setOnClickListener { setLanguage(index) }
@@ -404,7 +404,7 @@ class MainActivity : AppCompatActivity() {
         addHeading(page, t("admin_login"), t("admin_sub"))
         val adminId = addField(page, t("admin_id"), InputType.TYPE_CLASS_NUMBER)
         val password = addField(page, t("password"), InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
-        addAction(page, "Admin Login") {
+        addAction(page, t("admin_button")) {
             val id = adminId.text.toString().trim()
             val pass = password.text.toString()
             if (id.isBlank()) adminId.error = t("admin_id_error")
