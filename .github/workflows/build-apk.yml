@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - fresh-customer-admin-start
+      - version-1.97-add-11-services
 
 jobs:
   build:
