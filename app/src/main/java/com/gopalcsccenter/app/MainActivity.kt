@@ -396,7 +396,7 @@ class MainActivity : AppCompatActivity() {
             )
         )
 
-        addButton(page, "बिल तयार करा") {
+        addButton(page, "कोटेशन जनरेट PDF") {
             val name = customerName.text.toString().trim()
             val mobile = phone.text.toString().trim()
             val amountText = fee.text.toString().trim()
@@ -455,10 +455,11 @@ class MainActivity : AppCompatActivity() {
         val savedDocuments = persistApplicationDocuments(billNumber, documentUris)
         saveBillRecord(billNumber, date, customerName, phone, service, amount, reference, paymentStatus, receipt, savedDocuments)
         val pdf = createReceiptPdf(receipt, billNumber)
-        AlertDialog.Builder(this).setTitle("बिल तयार झाले").setMessage(receipt)
-            .setPositiveButton("PDF डाउनलोड") { _, _ -> savePdf(pdf, billNumber) }
-            .setNeutralButton("प्रिंट") { _, _ -> openPdf(pdf) }
-            .setNegativeButton("WhatsApp PDF शेअर") { _, _ -> sharePdf(pdf) }.show()
+        AlertDialog.Builder(this).setTitle("कोटेशन PDF तयार झाले").setMessage(receipt)
+            .setPositiveButton("Share") { _, _ -> sharePdf(pdf) }
+            .setNeutralButton("PDF सेव्ह") { _, _ -> savePdf(pdf, billNumber) }
+            .setNegativeButton("OK", null)
+            .show()
     }
 
     private fun saveBillRecord(billNumber: String, date: String, customerName: String, phone: String, service: String, amount: Double, reference: String, paymentStatus: String, receipt: String, documents: JSONArray) {
@@ -1140,7 +1141,7 @@ class MainActivity : AppCompatActivity() {
                 maxLines = 2
             }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
             row.addView(Button(this).apply {
-                text = "काढा"
+                text = "हटवा"
                 textSize = 12f
                 isAllCaps = false
                 setOnClickListener {
@@ -1149,21 +1150,25 @@ class MainActivity : AppCompatActivity() {
                 }
             })
             row.addView(Button(this).apply {
-                text = "बदला"
+                text = "पहा"
                 textSize = 12f
                 isAllCaps = false
-                setOnClickListener {
-                    selectedApplicationDocuments.remove(uri)
-                    refreshApplicationDocumentsList()
-                    val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                        addCategory(Intent.CATEGORY_OPENABLE)
-                        type = "*/*"
-                    }
-                    @Suppress("DEPRECATION")
-                    startActivityForResult(intent, chooseApplicationDocumentsRequest)
-                }
+                setOnClickListener { openApplicationDocument(uri) }
             })
             container.addView(row)
+        }
+    }
+
+    private fun openApplicationDocument(uri: android.net.Uri) {
+        try {
+            val mimeType = contentResolver.getType(uri) ?: "*/*"
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, mimeType)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(Intent.createChooser(intent, "कागदपत्र पाहण्यासाठी अॅप निवडा"))
+        } catch (_: Exception) {
+            showMessage("हे कागदपत्र उघडण्यासाठी योग्य अॅप उपलब्ध नाही.")
         }
     }
 
@@ -2070,7 +2075,7 @@ class MainActivity : AppCompatActivity() {
             type = "application/pdf"; putExtra(Intent.EXTRA_STREAM, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        startActivity(Intent.createChooser(intent, "PDF बिल शेअर करा"))
+        startActivity(Intent.createChooser(intent, "PDF कोटेशन शेअर करा"))
     }
 
     private fun openPdf(file: File) {
