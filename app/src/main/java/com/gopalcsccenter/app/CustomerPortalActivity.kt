@@ -219,14 +219,44 @@ class CustomerPortalActivity : Activity() {
 
     private fun showServices() {
         selectedService = null
-        newPage("ग्राहक Login — उपलब्ध सेवा")
-        addText(root, "नमस्कार ${fullName}! खालीलपैकी आवश्यक सेवा निवडा.", 15f)
-        services.forEachIndexed { index, service ->
-            addButton(root, "${index + 1}. ${service}") {
-                selectedFiles.clear()
-                showServiceDetails(service)
-            }
+        newPage("उपलब्ध सेवा")
+
+        // डॅशबोर्डवरील मूळ सेवा स्क्रीनप्रमाणेच क्रमांकित कार्ड यादी.
+        val scroll = ScrollView(this)
+        val list = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
         }
+
+        services.forEachIndexed { index, service ->
+            val item = TextView(this).apply {
+                text = "${index + 1}. $service"
+                textSize = 18f
+                setTextColor(Color.BLACK)
+                setPadding(12, 18, 12, 18)
+                setBackgroundColor(Color.rgb(240, 245, 250))
+                isClickable = true
+                isFocusable = true
+                setOnClickListener {
+                    selectedFiles.clear()
+                    showServiceDetails(service)
+                }
+            }
+            list.addView(
+                item,
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { setMargins(0, 5, 0, 5) }
+            )
+        }
+
+        scroll.addView(list)
+        root.addView(
+            scroll,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+            )
+        )
         addButton(root, "माझे अर्ज / कागदपत्रांची स्थिती") { showMyDocuments() }
         addButton(root, "Logout") { finish() }
     }
