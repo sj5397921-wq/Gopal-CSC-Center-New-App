@@ -36,21 +36,9 @@ class CustomerPortalActivity : Activity() {
     private val selectedFiles = linkedMapOf<String, Uri>()
     private lateinit var root: LinearLayout
 
-    private val services = listOf(
-        "आधार कार्ड सेवा",
-        "पॅन कार्ड सेवा",
-        "MahaDBT अर्ज",
-        "जात प्रमाणपत्र",
-        "उत्पन्न प्रमाणपत्र",
-        "रहिवासी प्रमाणपत्र",
-        "रेल्वे तिकीट बुकिंग",
-        "बस तिकीट बुकिंग",
-        "विमान तिकीट बुकिंग",
-        "ऑनलाइन फॉर्म",
-        "प्रिंट आणि झेरॉक्स"
-    )
+    private val services = CscServiceCatalog.services
 
-    private val requiredDocuments = mapOf(
+    private val defaultRequiredDocuments = mapOf(
         "आधार कार्ड सेवा" to listOf("आधार कार्ड (असल्यास)", "जन्म प्रमाणपत्र (बाल आधारसाठी)", "मोबाईल नंबर", "पत्ता / ओळख पुरावा (सेवेनुसार)"),
         "पॅन कार्ड सेवा" to listOf("आधार कार्ड", "मोबाईल नंबर", "ई-मेल आयडी", "फोटो व स्वाक्षरी (लागू असल्यास)"),
         "MahaDBT अर्ज" to listOf("आधार कार्ड", "बँक पासबुक", "7/12 उतारा (लागू असल्यास)", "8-A उतारा (लागू असल्यास)", "Farmer ID / जात प्रमाणपत्र (योजनेनुसार)"),
@@ -63,6 +51,22 @@ class CustomerPortalActivity : Activity() {
         "ऑनलाइन फॉर्म" to listOf("आधार कार्ड (लागू असल्यास)", "मोबाईल नंबर", "ई-मेल आयडी", "संबंधित अर्जासाठी आवश्यक कागदपत्रे"),
         "प्रिंट आणि झेरॉक्स" to listOf("मूळ कागदपत्रे किंवा स्पष्ट PDF / फोटो", "प्रिंटसाठी आवश्यक पानांची माहिती")
     )
+
+    private fun getRequiredDocuments(service: String): List<String> {
+        // Use the exact checklist saved by the Admin dashboard's Document Checklist screen.
+        val prefs = getSharedPreferences("gopal_csc_checklists", MODE_PRIVATE)
+        val saved = prefs.getString("documents_" + service.hashCode(), null)
+        if (!saved.isNullOrBlank()) {
+            try {
+                val items = JSONArray(saved)
+                return List(items.length()) { index -> items.optString(index) }
+                    .filter { it.isNotBlank() }
+            } catch (_: Exception) {
+                // Fall back to the app's default checklist if saved data is invalid.
+            }
+        }
+        return defaultRequiredDocuments[service].orEmpty()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -225,7 +229,7 @@ class CustomerPortalActivity : Activity() {
         selectedService = service
         newPage(service)
         addText(root, "या सेवेसाठी आवश्यक कागदपत्रे. प्रत्येक कागदासमोर PDF किंवा फोटो निवडा.", 14f)
-        val docs = requiredDocuments[service].orEmpty()
+        val docs = getRequiredDocuments(service)
         docs.forEach { document ->
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
