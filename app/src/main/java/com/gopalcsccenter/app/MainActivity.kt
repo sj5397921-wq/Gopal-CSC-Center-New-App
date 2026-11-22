@@ -513,7 +513,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         row.addView(TextView(this).apply {
-            text = "\${index + 1}.  \${serviceLabel(item)}"
+            text = "${index + 1}.  ${serviceLabel(item)}"
             textSize = 16f
             setTextColor(Color.rgb(35, 48, 64))
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
@@ -541,7 +541,7 @@ class MainActivity : AppCompatActivity() {
         recordScreen("customer_welcome")
         serviceListener?.remove()
         val page = basePage()
-        addHeading(page, t("customer_success"), "\${t("hello")}, \${auth.currentUser?.displayName ?: t("customer")}")
+        addHeading(page, t("customer_success"), "${t("hello")}, ${auth.currentUser?.displayName ?: t("customer")}")
         val folder = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(14), dp(14), dp(14), dp(14))
@@ -688,7 +688,7 @@ class MainActivity : AppCompatActivity() {
                     renderServiceRow(items, service, index) {
                         android.app.AlertDialog.Builder(this)
                             .setTitle("सेवा हटवा")
-                            .setMessage("‘\${serviceLabel(service)}’ ही सेवा हटवायची आहे? ग्राहकांच्या यादीतूनही हटवली जाईल.")
+                            .setMessage("‘${serviceLabel(service)}’ ही सेवा हटवायची आहे? ग्राहकांच्या यादीतूनही हटवली जाईल.")
                             .setNegativeButton("नाही", null)
                             .setPositiveButton("होय") { _, _ ->
                                 val updated = list.toMutableList().apply { removeAt(index) }
