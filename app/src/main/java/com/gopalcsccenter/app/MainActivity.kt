@@ -17,6 +17,35 @@ class MainActivity : AppCompatActivity() {
     private val dark = Color.rgb(35, 48, 64)
 
     private var languageIndex: Int = 0
+    private var currentScreen: String = "home"
+    private val screenHistory = mutableListOf<String>()
+
+    private fun recordScreen(screen: String) {
+        if (currentScreen != screen) {
+            screenHistory.add(currentScreen)
+            currentScreen = screen
+        }
+    }
+
+    @Deprecated("Deprecated in Android")
+    override fun onBackPressed() {
+        if (screenHistory.isNotEmpty()) {
+            val previous = screenHistory.removeAt(screenHistory.lastIndex)
+            when (previous) {
+                "home" -> showHome()
+                "customer_login" -> showCustomerLogin()
+                "create_account" -> showCreateCustomerAccount()
+                "admin_login" -> showAdminLogin()
+                "customer_welcome" -> showCustomerWelcome()
+                "admin_welcome" -> showAdminWelcome()
+                else -> showHome()
+            }
+        } else if (currentScreen != "home") {
+            showHome()
+        } else {
+            super.onBackPressed()
+        }
+    }
 
     private fun t(key: String): String {
         val words = mapOf(
@@ -230,6 +259,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showHome() {
+        recordScreen("home")
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.rgb(244, 247, 253))
@@ -345,6 +375,7 @@ class MainActivity : AppCompatActivity() {
         mobile.length == 10 && mobile.all { it in '0'..'9' }
 
     private fun showCustomerLogin() {
+        recordScreen("customer_login")
         val page = basePage()
         addHeading(page, t("customer_login"), t("customer_login_sub"))
         val mobile = addField(page, t("mobile_hint"), InputType.TYPE_CLASS_NUMBER, 10)
@@ -370,6 +401,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showCreateCustomerAccount() {
+        recordScreen("create_account")
         val page = basePage()
         addHeading(page, t("new_account"), t("account_sub"))
         val name = addField(page, t("full_name"))
@@ -412,6 +444,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showAdminLogin() {
+        recordScreen("admin_login")
         val page = basePage()
         addHeading(page, t("admin_login"), t("admin_sub"))
         val adminId = addField(page, t("admin_id"), InputType.TYPE_CLASS_NUMBER)
@@ -435,13 +468,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showCustomerWelcome() {
+        recordScreen("customer_welcome")
         val page = basePage()
         addHeading(page, t("customer_success"), "${t("hello")}, ${auth.currentUser?.displayName ?: t("customer")}")
-        addAction(page, t("logout")) { auth.signOut(); showHome() }
+        addAction(page, t("logout")) { auth.signOut(); screenHistory.clear(); showHome() }
         setContentView(page)
     }
 
     private fun showAdminWelcome() {
+        recordScreen("admin_welcome")
         val page = basePage()
         addHeading(page, t("admin_success"), t("admin_success_sub"))
         addAction(page, t("logout")) { auth.signOut(); showHome() }
