@@ -230,36 +230,104 @@ class MainActivity : AppCompatActivity() {
         val page = createLayout()
         addTitle(page, "उपलब्ध सेवा")
 
-        val scroll = ScrollView(this)
-        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val intro = TextView(this).apply {
+            text = "आपल्यासाठी उपलब्ध 11 डिजिटल सेवा"
+            textSize = 15f
+            setTextColor(Color.rgb(90, 100, 115))
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, 14)
+        }
+        page.addView(intro)
 
-        services.forEachIndexed { index, service ->
-            val item = TextView(this).apply {
-                text = "${index + 1}. $service"
-                textSize = 18f
-                setTextColor(Color.BLACK)
-                setPadding(12, 18, 12, 18)
-                setBackgroundColor(Color.rgb(240, 245, 250))
-                isClickable = true
-                isFocusable = true
-                setOnClickListener { showCustomerForm(service) }
+        val scroll = ScrollView(this)
+        val list = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(2, 2, 2, 10)
+        }
+
+        val serviceIcons = listOf("🪪", "💳", "🌾", "📜", "💰", "🏠", "🚆", "🚌", "✈️", "📝", "🖨️")
+        val cardColors = listOf(
+            Color.rgb(232, 242, 255), Color.rgb(238, 246, 255),
+            Color.rgb(235, 248, 239), Color.rgb(250, 241, 255),
+            Color.rgb(255, 247, 230), Color.rgb(232, 248, 247),
+            Color.rgb(239, 243, 255), Color.rgb(255, 241, 235),
+            Color.rgb(235, 246, 255), Color.rgb(246, 242, 255),
+            Color.rgb(242, 246, 248)
+        )
+        val density = resources.displayMetrics.density
+        fun dp(value: Int): Int = (value * density).toInt()
+
+        var index = 0
+        while (index < services.size) {
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
             }
-            list.addView(
-                item,
-                LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { setMargins(0, 5, 0, 5) }
-            )
+            for (column in 0..1) {
+                val serviceIndex = index + column
+                if (serviceIndex < services.size) {
+                    val service = services[serviceIndex]
+                    val card = LinearLayout(this).apply {
+                        orientation = LinearLayout.VERTICAL
+                        gravity = Gravity.CENTER
+                        setPadding(dp(10), dp(12), dp(10), dp(12))
+                        background = android.graphics.drawable.GradientDrawable().apply {
+                            setColor(cardColors[serviceIndex % cardColors.size])
+                            cornerRadius = dp(16).toFloat()
+                            setStroke(dp(1), Color.rgb(225, 232, 240))
+                        }
+                        elevation = dp(3).toFloat()
+                        isClickable = true
+                        isFocusable = true
+                        setOnClickListener { showCustomerForm(service) }
+                    }
+
+                    val icon = TextView(this).apply {
+                        text = serviceIcons[serviceIndex % serviceIcons.size]
+                        textSize = 29f
+                        gravity = Gravity.CENTER
+                    }
+                    card.addView(icon, LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, dp(42)
+                    ))
+
+                    val name = TextView(this).apply {
+                        text = service
+                        textSize = 15f
+                        setTextColor(Color.rgb(35, 48, 65))
+                        gravity = Gravity.CENTER
+                        setPadding(0, dp(7), 0, dp(5))
+                        setTypeface(null, android.graphics.Typeface.BOLD)
+                    }
+                    card.addView(name, LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+                    ))
+
+                    val hint = TextView(this).apply {
+                        text = "सेवा निवडा  ›"
+                        textSize = 12f
+                        setTextColor(Color.rgb(35, 105, 175))
+                        gravity = Gravity.CENTER
+                    }
+                    card.addView(hint)
+
+                    row.addView(card, LinearLayout.LayoutParams(
+                        0, dp(132), 1f
+                    ).apply {
+                        setMargins(dp(5), dp(5), dp(5), dp(5))
+                    })
+                } else {
+                    row.addView(android.view.View(this), LinearLayout.LayoutParams(0, dp(132), 1f))
+                }
+            }
+            list.addView(row)
+            index += 2
         }
 
         scroll.addView(list)
-        page.addView(
-            scroll,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
-            )
-        )
+        page.addView(scroll, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+        ))
         addButton(page, "ग्राहक लॉगआउट") {
             firebaseAuth.signOut()
             showMessage("ग्राहक लॉगआउट झाले.")
