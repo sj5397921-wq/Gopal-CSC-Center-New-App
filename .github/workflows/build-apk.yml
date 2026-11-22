@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - fresh-customer-admin-start
 
 jobs:
   build:
