@@ -81,21 +81,151 @@ class MainActivity : AppCompatActivity() {
         ).apply { setMargins(0, 8, 0, 8) })
     }
 
-    private fun showHome() {
-        val page = basePage()
-        addHeading(page, "GOPAL CSC CENTER", "आपल्या सर्व डिजिटल सेवा एकाच ठिकाणी")
-        val spacer = TextView(this).apply { text = ""; height = 28 }
-        page.addView(spacer)
-        addAction(page, "ग्राहक Login") { showCustomerLogin() }
-        addAction(page, "Admin Login") { showAdminLogin() }
-        page.addView(TextView(this).apply {
-            text = "जलद सेवा • योग्य मार्गदर्शन • विश्वासार्ह सेवा"
-            textSize = 13f
-            setTextColor(Color.GRAY)
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
+    private fun homeCard(parent: LinearLayout, icon: String, title: String, subtitle: String, buttonText: String, accent: Int, action: () -> Unit) {
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(18), dp(20), dp(18))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(Color.WHITE)
+                cornerRadius = dp(22).toFloat()
+                setStroke(dp(1), Color.rgb(229, 235, 245))
+            }
+            elevation = dp(5).toFloat()
+        }
+        val top = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val iconView = TextView(this).apply {
+            text = icon
+            textSize = 30f
             gravity = Gravity.CENTER
-            setPadding(0, 26, 0, 0)
+            setTextColor(Color.WHITE)
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                intArrayOf(accent, Color.rgb(105, 125, 230))
+            ).apply { cornerRadius = dp(18).toFloat() }
+        }
+        top.addView(iconView, LinearLayout.LayoutParams(dp(62), dp(62)))
+        val texts = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), 0, 0, 0)
+        }
+        texts.addView(TextView(this).apply {
+            text = title
+            textSize = 20f
+            setTextColor(Color.rgb(29, 43, 67))
+            setTypeface(null, android.graphics.Typeface.BOLD)
         })
-        setContentView(page)
+        texts.addView(TextView(this).apply {
+            text = subtitle
+            textSize = 13f
+            setTextColor(Color.rgb(105, 117, 138))
+            setPadding(0, dp(4), 0, 0)
+        })
+        top.addView(texts, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        card.addView(top)
+        val button = TextView(this).apply {
+            text = "$buttonText     ›"
+            textSize = 16f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(accent)
+                cornerRadius = dp(14).toFloat()
+            }
+            setPadding(dp(12), dp(13), dp(12), dp(13))
+            setOnClickListener { action() }
+        }
+        card.addView(button, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = dp(18)
+        })
+        parent.addView(card, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            bottomMargin = dp(18)
+        })
+        card.setOnClickListener { action() }
+    }
+
+    private fun showHome() {
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.rgb(244, 247, 253))
+        }
+        val scroll = ScrollView(this).apply { isFillViewport = true }
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(22), dp(24), dp(22), dp(24))
+        }
+
+        val hero = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(20), dp(30), dp(20), dp(30))
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                intArrayOf(Color.rgb(17, 73, 145), Color.rgb(92, 75, 190), Color.rgb(111, 89, 210))
+            ).apply {
+                cornerRadius = dp(28).toFloat()
+            }
+        }
+        hero.addView(TextView(this).apply {
+            text = "G"
+            textSize = 36f
+            gravity = Gravity.CENTER
+            setTextColor(Color.rgb(30, 76, 145))
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(Color.WHITE)
+                shape = android.graphics.drawable.GradientDrawable.OVAL
+            }
+        }, LinearLayout.LayoutParams(dp(76), dp(76)))
+        hero.addView(TextView(this).apply {
+            text = "GOPAL CSC CENTER"
+            textSize = 23f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setPadding(0, dp(16), 0, dp(6))
+        })
+        hero.addView(TextView(this).apply {
+            text = "आपल्या डिजिटल सेवांचे विश्वासार्ह केंद्र"
+            textSize = 14f
+            gravity = Gravity.CENTER
+            setTextColor(Color.rgb(230, 235, 255))
+        })
+        content.addView(hero, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            bottomMargin = dp(28)
+        })
+
+        content.addView(TextView(this).apply {
+            text = "आपले स्वागत आहे!"
+            textSize = 24f
+            setTextColor(Color.rgb(29, 43, 67))
+            setTypeface(null, android.graphics.Typeface.BOLD)
+        })
+        content.addView(TextView(this).apply {
+            text = "पुढे जाण्यासाठी आपला पर्याय निवडा"
+            textSize = 14f
+            setTextColor(Color.rgb(112, 123, 143))
+            setPadding(0, dp(5), 0, dp(20))
+        })
+
+        homeCard(content, "👤", "ग्राहक लॉगिन", "आपल्या खात्यात प्रवेश करा", "ग्राहक लॉगिन करा", Color.rgb(24, 119, 210)) { showCustomerLogin() }
+        homeCard(content, "🔐", "ॲडमिन लॉगिन", "अधिकृत व्यवस्थापनासाठी", "ॲडमिन लॉगिन करा", Color.rgb(104, 78, 190)) { showAdminLogin() }
+
+        content.addView(TextView(this).apply {
+            text = "जलद सेवा  •  योग्य मार्गदर्शन  •  विश्वासार्ह सेवा"
+            textSize = 12f
+            gravity = Gravity.CENTER
+            setTextColor(Color.rgb(125, 135, 153))
+            setPadding(0, dp(8), 0, dp(10))
+        })
+        scroll.addView(content)
+        root.addView(scroll)
+        setContentView(root)
     }
 
     private fun mobileEmail(mobile: String): String = "91${mobile}@gopalcsccenter.app"
