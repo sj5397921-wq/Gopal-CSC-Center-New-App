@@ -212,7 +212,10 @@ class CustomerPortalActivity : Activity() {
         newPage("ग्राहक Login — उपलब्ध सेवा")
         addText(root, "नमस्कार ${fullName}! खालीलपैकी आवश्यक सेवा निवडा.", 15f)
         services.forEachIndexed { index, service ->
-            addButton(root, "${index + 1}. ${service}") { showServiceDetails(service) }
+            addButton(root, "${index + 1}. ${service}") {
+                selectedFiles.clear()
+                showServiceDetails(service)
+            }
         }
         addButton(root, "माझे अर्ज / कागदपत्रांची स्थिती") { showMyDocuments() }
         addButton(root, "Logout") { finish() }
@@ -220,7 +223,6 @@ class CustomerPortalActivity : Activity() {
 
     private fun showServiceDetails(service: String) {
         selectedService = service
-        selectedFiles.clear()
         newPage(service)
         addText(root, "या सेवेसाठी आवश्यक कागदपत्रे. प्रत्येक कागदासमोर PDF किंवा फोटो निवडा.", 14f)
         val docs = requiredDocuments[service].orEmpty()
