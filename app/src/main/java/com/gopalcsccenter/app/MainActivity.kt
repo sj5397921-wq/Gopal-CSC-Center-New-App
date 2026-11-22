@@ -16,8 +16,63 @@ class MainActivity : AppCompatActivity() {
     private val blue = Color.rgb(22, 91, 166)
     private val dark = Color.rgb(35, 48, 64)
 
+    private var languageIndex: Int = 0
+
+    private fun t(key: String): String {
+        val words = mapOf(
+            "tagline" to listOf("आपल्या डिजिटल सेवांचे विश्वासार्ह केंद्र", "Your trusted digital services center", "आपकी विश्वसनीय डिजिटल सेवा केंद्र"),
+            "welcome" to listOf("आपले स्वागत आहे!", "Welcome!", "आपका स्वागत है!"),
+            "choose" to listOf("पुढे जाण्यासाठी आपला पर्याय निवडा", "Choose an option to continue", "आगे बढ़ने के लिए विकल्प चुनें"),
+            "customer_login" to listOf("ग्राहक लॉगिन", "Customer Login", "ग्राहक लॉगिन"),
+            "customer_sub" to listOf("आपल्या खात्यात प्रवेश करा", "Access your account", "अपने खाते में प्रवेश करें"),
+            "customer_button" to listOf("ग्राहक लॉगिन करा", "Customer Login", "ग्राहक लॉगिन करें"),
+            "admin_login" to listOf("ॲडमिन लॉगिन", "Admin Login", "एडमिन लॉगिन"),
+            "admin_sub" to listOf("अधिकृत व्यवस्थापनासाठी", "For authorized management", "अधिकृत प्रबंधन के लिए"),
+            "admin_button" to listOf("ॲडमिन लॉगिन करा", "Admin Login", "एडमिन लॉगिन करें"),
+            "footer" to listOf("जलद सेवा  •  योग्य मार्गदर्शन  •  विश्वासार्ह सेवा", "Fast Service  •  Right Guidance  •  Trusted Service", "त्वरित सेवा  •  सही मार्गदर्शन  •  विश्वसनीय सेवा"),
+            "customer_login_sub" to listOf("आपल्या मोबाईल नंबरने लॉगिन करा", "Login with your mobile number", "अपने मोबाइल नंबर से लॉगिन करें"),
+            "mobile_hint" to listOf("10 अंकी मोबाईल नंबर", "10-digit mobile number", "10 अंकों का मोबाइल नंबर"),
+            "password" to listOf("पासवर्ड", "Password", "पासवर्ड"),
+            "login" to listOf("लॉगिन", "Login", "लॉगिन"),
+            "mobile_error" to listOf("फक्त 10 अंकी मोबाईल नंबर टाका", "Enter exactly 10 digits", "केवल 10 अंकों का मोबाइल नंबर दर्ज करें"),
+            "password_error" to listOf("पासवर्ड टाका", "Enter password", "पासवर्ड दर्ज करें"),
+            "login_error" to listOf("मोबाईल नंबर किंवा पासवर्ड चुकीचा आहे.", "Incorrect mobile number or password.", "मोबाइल नंबर या पासवर्ड गलत है।"),
+            "create_account" to listOf("नवीन खाते तयार करा", "Create New Account", "नया खाता बनाएँ"),
+            "home" to listOf("मुख्य पानावर जा", "Go to Home", "मुख्य पृष्ठ पर जाएँ"),
+            "new_account" to listOf("नवीन ग्राहक खाते", "New Customer Account", "नया ग्राहक खाता"),
+            "account_sub" to listOf("खाते तयार करण्यासाठी माहिती भरा", "Enter details to create an account", "खाता बनाने के लिए जानकारी भरें"),
+            "full_name" to listOf("ग्राहकाचे पूर्ण नाव", "Customer full name", "ग्राहक का पूरा नाम"),
+            "password_min" to listOf("पासवर्ड (किमान 8 अक्षरे)", "Password (minimum 8 characters)", "पासवर्ड (कम से कम 8 अक्षर)"),
+            "confirm_password" to listOf("पासवर्ड पुन्हा टाका", "Confirm password", "पासवर्ड फिर से दर्ज करें"),
+            "create" to listOf("खाते तयार करा", "Create Account", "खाता बनाएँ"),
+            "name_error" to listOf("पूर्ण नाव टाका", "Enter full name", "पूरा नाम दर्ज करें"),
+            "password_min_error" to listOf("पासवर्ड किमान 8 अक्षरांचा असावा", "Password must be at least 8 characters", "पासवर्ड कम से कम 8 अक्षरों का होना चाहिए"),
+            "password_match_error" to listOf("दोन्ही पासवर्ड जुळत नाहीत", "Passwords do not match", "दोनों पासवर्ड मेल नहीं खाते"),
+            "account_created" to listOf("ग्राहक खाते तयार झाले.", "Customer account created.", "ग्राहक खाता बन गया।"),
+            "account_failed" to listOf("खाते तयार झाले नाही.", "Account could not be created.", "खाता नहीं बन पाया।"),
+            "back_login" to listOf("Login पानावर जा", "Back to Login", "लॉगिन पृष्ठ पर जाएँ"),
+            "admin_id" to listOf("Admin ID", "Admin ID", "एडमिन आईडी"),
+            "admin_id_error" to listOf("Admin ID टाका", "Enter Admin ID", "एडमिन आईडी दर्ज करें"),
+            "admin_error" to listOf("Admin ID किंवा पासवर्ड चुकीचा आहे.", "Incorrect Admin ID or password.", "एडमिन आईडी या पासवर्ड गलत है।"),
+            "customer_success" to listOf("ग्राहक लॉगिन यशस्वी", "Customer Login Successful", "ग्राहक लॉगिन सफल"),
+            "hello" to listOf("नमस्कार", "Hello", "नमस्ते"),
+            "customer" to listOf("ग्राहक", "Customer", "ग्राहक"),
+            "logout" to listOf("लॉगआउट", "Logout", "लॉगआउट"),
+            "admin_success" to listOf("Admin लॉगिन यशस्वी", "Admin Login Successful", "एडमिन लॉगिन सफल"),
+            "admin_success_sub" to listOf("Admin डॅशबोर्ड पुढील टप्प्यात तयार करू.", "Admin dashboard will be added in the next phase.", "एडमिन डैशबोर्ड अगले चरण में जोड़ा जाएगा।")
+        )
+        return words[key]?.get(languageIndex) ?: key
+    }
+
+    private fun setLanguage(index: Int) {
+        languageIndex = index
+        getSharedPreferences("gopal_settings", MODE_PRIVATE).edit().putInt("language", index).apply()
+        showHome()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        languageIndex = getSharedPreferences("gopal_settings", MODE_PRIVATE).getInt("language", 0).coerceIn(0, 2)
         showHome()
     }
 
@@ -173,6 +228,37 @@ class MainActivity : AppCompatActivity() {
             setPadding(dp(22), dp(24), dp(22), dp(24))
         }
 
+
+        val languageBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.END or Gravity.CENTER_VERTICAL
+            setPadding(0, 0, 0, dp(12))
+        }
+        languageBar.addView(TextView(this).apply {
+            text = "Language / भाषा"
+            textSize = 11f
+            setTextColor(Color.rgb(235, 238, 255))
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 0, dp(7), 0)
+        })
+        listOf("मराठी", "English", "हिंदी").forEachIndexed { index, label ->
+            languageBar.addView(TextView(this).apply {
+                text = label
+                textSize = 11f
+                gravity = Gravity.CENTER
+                setPadding(dp(9), dp(7), dp(9), dp(7))
+                setTextColor(if (languageIndex == index) Color.rgb(31, 65, 130) else Color.WHITE)
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(if (languageIndex == index) Color.WHITE else Color.argb(55, 255, 255, 255))
+                    cornerRadius = dp(14).toFloat()
+                }
+                setOnClickListener { setLanguage(index) }
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                setMargins(dp(3), 0, 0, 0)
+            })
+        }
+        content.addView(languageBar)
+
         val hero = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
@@ -204,7 +290,7 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, dp(16), 0, dp(6))
         })
         hero.addView(TextView(this).apply {
-            text = "आपल्या डिजिटल सेवांचे विश्वासार्ह केंद्र"
+            text = t("tagline")
             textSize = 14f
             gravity = Gravity.CENTER
             setTextColor(Color.rgb(230, 235, 255))
@@ -214,23 +300,23 @@ class MainActivity : AppCompatActivity() {
         })
 
         content.addView(TextView(this).apply {
-            text = "आपले स्वागत आहे!"
+            text = t("welcome")
             textSize = 24f
             setTextColor(Color.rgb(29, 43, 67))
             setTypeface(null, android.graphics.Typeface.BOLD)
         })
         content.addView(TextView(this).apply {
-            text = "पुढे जाण्यासाठी आपला पर्याय निवडा"
+            text = t("choose")
             textSize = 14f
             setTextColor(Color.rgb(112, 123, 143))
             setPadding(0, dp(5), 0, dp(20))
         })
 
-        homeCard(content, "👤", "ग्राहक लॉगिन", "आपल्या खात्यात प्रवेश करा", "ग्राहक लॉगिन करा", Color.rgb(24, 119, 210)) { showCustomerLogin() }
-        homeCard(content, "🔐", "ॲडमिन लॉगिन", "अधिकृत व्यवस्थापनासाठी", "ॲडमिन लॉगिन करा", Color.rgb(104, 78, 190)) { showAdminLogin() }
+        homeCard(content, "👤", t("customer_login"), t("customer_sub"), t("customer_button"), Color.rgb(24, 119, 210)) { showCustomerLogin() }
+        homeCard(content, "🔐", t("admin_login"), t("admin_sub"), t("admin_button"), Color.rgb(104, 78, 190)) { showAdminLogin() }
 
         content.addView(TextView(this).apply {
-            text = "जलद सेवा  •  योग्य मार्गदर्शन  •  विश्वासार्ह सेवा"
+            text = t("footer")
             textSize = 12f
             gravity = Gravity.CENTER
             setTextColor(Color.rgb(125, 135, 153))
@@ -248,48 +334,48 @@ class MainActivity : AppCompatActivity() {
 
     private fun showCustomerLogin() {
         val page = basePage()
-        addHeading(page, "ग्राहक Login", "आपल्या मोबाईल नंबरने लॉगिन करा")
-        val mobile = addField(page, "10 अंकी मोबाईल नंबर", InputType.TYPE_CLASS_NUMBER, 10)
-        val password = addField(page, "पासवर्ड", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
-        addAction(page, "Login") {
+        addHeading(page, t("customer_login"), t("customer_login_sub"))
+        val mobile = addField(page, t("mobile_hint"), InputType.TYPE_CLASS_NUMBER, 10)
+        val password = addField(page, t("password"), InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
+        addAction(page, t("login")) {
             val number = mobile.text.toString().trim()
             val pass = password.text.toString()
             if (!validMobile(number)) {
-                mobile.error = "फक्त 10 अंकी मोबाईल नंबर टाका"
+                mobile.error = t("mobile_error")
             } else if (pass.isBlank()) {
-                password.error = "पासवर्ड टाका"
+                password.error = t("password_error")
             } else {
                 auth.signInWithEmailAndPassword(mobileEmail(number), pass)
                     .addOnCompleteListener { task ->
                         if (task.isSuccessful) showCustomerWelcome()
-                        else Toast.makeText(this, "मोबाईल नंबर किंवा पासवर्ड चुकीचा आहे.", Toast.LENGTH_LONG).show()
+                        else Toast.makeText(this, t("login_error"), Toast.LENGTH_LONG).show()
                     }
             }
         }
-        addAction(page, "नवीन खाते तयार करा") { showCreateCustomerAccount() }
-        addAction(page, "मुख्य पानावर जा") { showHome() }
+        addAction(page, t("create_account")) { showCreateCustomerAccount() }
+        addAction(page, t("home")) { showHome() }
         setContentView(ScrollView(this).apply { addView(page) })
     }
 
     private fun showCreateCustomerAccount() {
         val page = basePage()
-        addHeading(page, "नवीन ग्राहक खाते", "खाते तयार करण्यासाठी माहिती भरा")
-        val name = addField(page, "ग्राहकाचे पूर्ण नाव")
-        val mobile = addField(page, "10 अंकी मोबाईल नंबर", InputType.TYPE_CLASS_NUMBER, 10)
-        val password = addField(page, "पासवर्ड (किमान 8 अक्षरे)", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
-        val confirm = addField(page, "पासवर्ड पुन्हा टाका", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
+        addHeading(page, t("new_account"), t("account_sub"))
+        val name = addField(page, t("full_name"))
+        val mobile = addField(page, t("mobile_hint"), InputType.TYPE_CLASS_NUMBER, 10)
+        val password = addField(page, t("password_min"), InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
+        val confirm = addField(page, t("confirm_password"), InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
 
-        addAction(page, "खाते तयार करा") {
+        addAction(page, t("create")) {
             val customerName = name.text.toString().trim()
             val number = mobile.text.toString().trim()
             val pass = password.text.toString()
             val confirmPass = confirm.text.toString()
 
             when {
-                customerName.isBlank() -> name.error = "पूर्ण नाव टाका"
-                !validMobile(number) -> mobile.error = "फक्त 10 अंकी मोबाईल नंबर टाका"
-                pass.length < 8 -> password.error = "पासवर्ड किमान 8 अक्षरांचा असावा"
-                pass != confirmPass -> confirm.error = "दोन्ही पासवर्ड जुळत नाहीत"
+                customerName.isBlank() -> name.error = t("name_error")
+                !validMobile(number) -> mobile.error = t("mobile_error")
+                pass.length < 8 -> password.error = t("password_min_error")
+                pass != confirmPass -> confirm.error = t("password_match_error")
                 else -> {
                     auth.createUserWithEmailAndPassword(mobileEmail(number), pass)
                         .addOnCompleteListener { task ->
@@ -298,55 +384,55 @@ class MainActivity : AppCompatActivity() {
                                     .setDisplayName(customerName)
                                     .build()
                                 auth.currentUser?.updateProfile(profile)?.addOnCompleteListener {
-                                    Toast.makeText(this, "ग्राहक खाते तयार झाले.", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(this, t("account_created"), Toast.LENGTH_LONG).show()
                                     showCustomerWelcome()
                                 } ?: showCustomerWelcome()
                             } else {
-                                Toast.makeText(this, task.exception?.localizedMessage ?: "खाते तयार झाले नाही.", Toast.LENGTH_LONG).show()
+                                Toast.makeText(this, task.exception?.localizedMessage ?: t("account_failed"), Toast.LENGTH_LONG).show()
                             }
                         }
                 }
             }
         }
-        addAction(page, "Login पानावर जा") { showCustomerLogin() }
-        addAction(page, "मुख्य पानावर जा") { showHome() }
+        addAction(page, t("back_login")) { showCustomerLogin() }
+        addAction(page, t("home")) { showHome() }
         setContentView(ScrollView(this).apply { addView(page) })
     }
 
     private fun showAdminLogin() {
         val page = basePage()
-        addHeading(page, "Admin Login", "फक्त अधिकृत Admin साठी")
-        val adminId = addField(page, "Admin ID", InputType.TYPE_CLASS_NUMBER)
-        val password = addField(page, "पासवर्ड", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
+        addHeading(page, t("admin_login"), t("admin_sub"))
+        val adminId = addField(page, t("admin_id"), InputType.TYPE_CLASS_NUMBER)
+        val password = addField(page, t("password"), InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
         addAction(page, "Admin Login") {
             val id = adminId.text.toString().trim()
             val pass = password.text.toString()
-            if (id.isBlank()) adminId.error = "Admin ID टाका"
-            else if (pass.isBlank()) password.error = "पासवर्ड टाका"
+            if (id.isBlank()) adminId.error = t("admin_id_error")
+            else if (pass.isBlank()) password.error = t("password_error")
             else auth.signInWithEmailAndPassword("${id}@gopalcsccenter.app", pass)
                 .addOnCompleteListener { task ->
                     if (task.isSuccessful && id == "636657750019") showAdminWelcome()
                     else {
                         auth.signOut()
-                        Toast.makeText(this, "Admin ID किंवा पासवर्ड चुकीचा आहे.", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this, t("admin_error"), Toast.LENGTH_LONG).show()
                     }
                 }
         }
-        addAction(page, "मुख्य पानावर जा") { showHome() }
+        addAction(page, t("home")) { showHome() }
         setContentView(page)
     }
 
     private fun showCustomerWelcome() {
         val page = basePage()
-        addHeading(page, "ग्राहक Login यशस्वी", "नमस्कार, ${auth.currentUser?.displayName ?: "ग्राहक"}")
-        addAction(page, "Logout") { auth.signOut(); showHome() }
+        addHeading(page, t("customer_success"), "${t("hello")}, ${auth.currentUser?.displayName ?: t("customer")}")
+        addAction(page, t("logout")) { auth.signOut(); showHome() }
         setContentView(page)
     }
 
     private fun showAdminWelcome() {
         val page = basePage()
-        addHeading(page, "Admin Login यशस्वी", "Admin डॅशबोर्ड पुढील टप्प्यात तयार करू.")
-        addAction(page, "Logout") { auth.signOut(); showHome() }
+        addHeading(page, t("admin_success"), t("admin_success_sub"))
+        addAction(page, t("logout")) { auth.signOut(); showHome() }
         setContentView(page)
     }
 }
