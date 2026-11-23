@@ -69,6 +69,8 @@ class MainActivity : AppCompatActivity() {
                 "admin_documents" -> showAdminDocuments(activeServiceName)
                 "admin_fee" -> showAdminWelcome()
                 "customer_documents" -> showCustomerDocuments(activeServiceName)
+                "application_status" -> showCustomerApplicationStatus()
+                "admin_applications" -> showAdminApplications()
                 else -> showHome()
             }
         } else if (currentScreen != "home") {
@@ -598,6 +600,7 @@ class MainActivity : AppCompatActivity() {
         page.addView(folder, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply { setMargins(0, dp(10), 0, dp(18)) })
+        addAction(page, "📋  अर्जाची स्थिती") { showCustomerApplicationStatus() }
 
         serviceListener = db.collection("app_config").document("services")
             .addSnapshotListener { snapshot, error ->
@@ -661,6 +664,7 @@ class MainActivity : AppCompatActivity() {
         page.addView(folder, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply { setMargins(0, dp(10), 0, dp(18)) })
+        addAction(page, "📋  अर्ज व्यवस्थापन") { showAdminApplications() }
 
         val newService = addField(page, "नवीन सेवेचे नाव टाका")
         addAction(page, "＋ सेवा जोडा") {
@@ -739,6 +743,160 @@ class MainActivity : AppCompatActivity() {
             screenHistory.clear()
             showHome()
         }
+        setContentView(ScrollView(this).apply { isFillViewport = true; addView(page) })
+    }
+
+    private fun showCustomerApplicationStatus() {
+        val user = auth.currentUser
+        if (user == null) {
+            Toast.makeText(this, "कृपया पुन्हा लॉगिन करा.", Toast.LENGTH_LONG).show()
+            return
+        }
+        recordScreen("application_status")
+        val page = basePage()
+        addHeading(page, "अर्जाची स्थिती", "आपल्या अर्जांची सद्यस्थिती")
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        page.addView(list)
+        list.addView(TextView(this).apply {
+            text = "अर्जांची माहिती लोड होत आहे..."
+            setTextColor(Color.WHITE)
+        })
+        db.collection("service_document_uploads").whereEqualTo("uid", user.uid).get()
+            .addOnSuccessListener { result ->
+                list.removeAllViews()
+                val applications = result.documents.filter {
+                    it.getString("recordType") == "customer_application"
+                }.sortedByDescending { it.getTimestamp("createdAt")?.toDate()?.time ?: 0L }
+                if (applications.isEmpty()) {
+                    list.addView(TextView(this).apply {
+                        text = "अद्याप कोणताही अर्ज नोंदवलेला नाही."
+                        textSize = 16f
+                        setTextColor(Color.WHITE)
+                        setPadding(0, dp(14), 0, dp(14))
+                    })
+                } else applications.forEach { doc ->
+                    val card = LinearLayout(this).apply {
+                        orientation = LinearLayout.VERTICAL
+                        setPadding(dp(14), dp(12), dp(14), dp(12))
+                        background = android.graphics.drawable.GradientDrawable().apply {
+                            setColor(Color.WHITE); cornerRadius = dp(14).toFloat()
+                        }
+                    }
+                    val date = doc.getTimestamp("createdAt")?.toDate()?.let {
+                        SimpleDateFormat("dd-MM-yyyy HH:mm", Locale.getDefault()).format(it)
+                    } ?: "—"
+                    card.addView(TextView(this).apply {
+                        text = doc.getString("serviceName") ?: "सेवा"
+                        textSize = 18f; setTypeface(null, android.graphics.Typeface.BOLD); setTextColor(dark)
+                    })
+                    card.addView(TextView(this).apply {
+                        text = "ग्राहक: ${doc.getString("customerName") ?: "—"}\nदिनांक: $date"
+                        textSize = 14f; setTextColor(dark); setPadding(0, dp(5), 0, dp(5))
+                    })
+                    card.addView(TextView(this).apply {
+                        text = "स्थिती: ${doc.getString("status") ?: "अर्ज प्राप्त"}"
+                        textSize = 16f; setTypeface(null, android.graphics.Typeface.BOLD)
+                        setTextColor(Color.rgb(20, 130, 75))
+                    })
+                    list.addView(card, LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply { bottomMargin = dp(12) })
+                }
+            }
+            .addOnFailureListener {
+                list.removeAllViews()
+                list.addView(TextView(this).apply { text = firestoreErrorMessage(it); setTextColor(Color.WHITE) })
+            }
+        addAction(page, "मागे जा") { showCustomerWelcome() }
+        setContentView(ScrollView(this).apply { isFillViewport = true; addView(page) })
+    }
+
+    private fun showAdminApplications() {
+        if (auth.currentUser?.email != adminEmail) {
+            Toast.makeText(this, "फक्त Admin अर्जांची स्थिती बदलू शकतो.", Toast.LENGTH_LONG).show()
+            return
+        }
+        recordScreen("admin_applications")
+        val page = basePage()
+        addHeading(page, "अर्ज व्यवस्थापन", "ग्राहकांचे अर्ज व स्थिती अपडेट")
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        page.addView(list)
+        val statuses = arrayOf("अर्ज प्राप्त", "कागदपत्रे तपासणी सुरू", "प्रक्रियेत", "अधिक माहिती आवश्यक", "पूर्ण झाले", "रद्द")
+        fun loadApplications() {
+            list.removeAllViews()
+            list.addView(TextView(this).apply {
+                text = "अर्ज लोड होत आहेत..."
+                setTextColor(Color.WHITE)
+            })
+            db.collection("service_document_uploads")
+                .whereEqualTo("recordType", "customer_application").get()
+                .addOnSuccessListener { result ->
+                    list.removeAllViews()
+                    val applications = result.documents.sortedByDescending {
+                        it.getTimestamp("createdAt")?.toDate()?.time ?: 0L
+                    }
+                    if (applications.isEmpty()) {
+                        list.addView(TextView(this).apply {
+                            text = "सध्या कोणतेही ग्राहक अर्ज नाहीत."
+                            setTextColor(Color.WHITE); textSize = 16f
+                        })
+                    }
+                    applications.forEach { doc ->
+                        val card = LinearLayout(this).apply {
+                            orientation = LinearLayout.VERTICAL
+                            setPadding(dp(14), dp(12), dp(14), dp(12))
+                            background = android.graphics.drawable.GradientDrawable().apply {
+                                setColor(Color.WHITE); cornerRadius = dp(14).toFloat()
+                            }
+                        }
+                        card.addView(TextView(this).apply {
+                            text = doc.getString("serviceName") ?: "सेवा"
+                            textSize = 18f; setTypeface(null, android.graphics.Typeface.BOLD); setTextColor(dark)
+                        })
+                        card.addView(TextView(this).apply {
+                            text = "नाव: ${doc.getString("customerName") ?: "—"}\nमोबाईल: ${doc.getString("customerMobile") ?: "—"}"
+                            textSize = 14f; setTextColor(dark); setPadding(0, dp(5), 0, dp(5))
+                        })
+                        val statusView = TextView(this).apply {
+                            text = "सध्याची स्थिती: ${doc.getString("status") ?: "अर्ज प्राप्त"}"
+                            textSize = 15f; setTypeface(null, android.graphics.Typeface.BOLD); setTextColor(Color.rgb(20, 130, 75))
+                        }
+                        card.addView(statusView)
+                        card.addView(Button(this).apply {
+                            text = "स्थिती बदला"; isAllCaps = false
+                            setOnClickListener {
+                                android.app.AlertDialog.Builder(this@MainActivity)
+                                    .setTitle("अर्जाची स्थिती निवडा")
+                                    .setItems(statuses) { _, which ->
+                                        val newStatus = statuses[which]
+                                        db.collection("service_document_uploads").document(doc.id)
+                                            .update(
+                                                "status", newStatus,
+                                                "statusUpdatedAt", com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                            )
+                                            .addOnSuccessListener {
+                                                Toast.makeText(this@MainActivity, "अर्जाची स्थिती अपडेट झाली.", Toast.LENGTH_SHORT).show()
+                                                loadApplications()
+                                            }
+                                            .addOnFailureListener {
+                                                Toast.makeText(this@MainActivity, firestoreErrorMessage(it), Toast.LENGTH_LONG).show()
+                                            }
+                                    }.setNegativeButton("रद्द", null).show()
+                            }
+                        })
+                        list.addView(card, LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+                        ).apply { bottomMargin = dp(12) })
+                    }
+                }
+                .addOnFailureListener {
+                    list.removeAllViews()
+                    list.addView(TextView(this).apply { text = firestoreErrorMessage(it); setTextColor(Color.WHITE) })
+                }
+        }
+        addAction(page, "अर्ज रिफ्रेश करा") { loadApplications() }
+        addAction(page, "मागे जा") { showAdminWelcome() }
+        loadApplications()
         setContentView(ScrollView(this).apply { isFillViewport = true; addView(page) })
     }
 
@@ -889,6 +1047,7 @@ class MainActivity : AppCompatActivity() {
                         "serviceName" to serviceName,
                         "customerName" to customerName,
                         "customerMobile" to customerMobile,
+                        "status" to "अर्ज प्राप्त",
                         "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
                     )).addOnSuccessListener {
                         Toast.makeText(this, "अर्जाची माहिती जतन झाली.", Toast.LENGTH_LONG).show()
