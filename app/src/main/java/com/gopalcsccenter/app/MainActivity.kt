@@ -32,6 +32,8 @@ class MainActivity : AppCompatActivity() {
     private var pendingDocumentName: String = ""
     private var currentCustomerName: String = ""
     private var currentCustomerMobile: String = ""
+    private var currentApplicationId: String = ""
+    private var documentUploadListener: ListenerRegistration? = null
     private val storage by lazy { FirebaseStorage.getInstance() }
     private val adminEmail = "636657750019@gopalcsccenter.app"
     private val filePickerRequestCode = 741
@@ -632,6 +634,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showAdminWelcome() {
+        documentUploadListener?.remove()
+        documentUploadListener = null
         recordScreen("admin_welcome")
         serviceListener?.remove()
         val page = basePage()
@@ -823,6 +827,8 @@ class MainActivity : AppCompatActivity() {
         page.addView(list)
         val statuses = arrayOf("अर्ज प्राप्त", "कागदपत्रे तपासणी सुरू", "प्रक्रियेत", "अधिक माहिती आवश्यक", "पूर्ण झाले", "रद्द")
         fun loadApplications() {
+            documentUploadListener?.remove()
+            documentUploadListener = null
             list.removeAllViews()
             list.addView(TextView(this).apply {
                 text = "अर्ज लोड होत आहेत..."
@@ -888,6 +894,80 @@ class MainActivity : AppCompatActivity() {
                             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
                         ).apply { bottomMargin = dp(12) })
                     }
+                    list.addView(TextView(this).apply {
+                        text = "📎 ग्राहकांनी अपलोड केलेली कागदपत्रे"
+                        textSize = 19f
+                        setTypeface(null, android.graphics.Typeface.BOLD)
+                        setTextColor(Color.WHITE)
+                        setPadding(0, dp(18), 0, dp(10))
+                    })
+                    documentUploadListener = db.collection("service_document_uploads")
+                        .addSnapshotListener { uploadResult, uploadError ->
+                            if (uploadError != null) {
+                                Toast.makeText(this@MainActivity, firestoreErrorMessage(uploadError), Toast.LENGTH_LONG).show()
+                            } else {
+                                // Keep the application cards and refresh only the uploaded-document section.
+                                val markerIndex = (0 until list.childCount).firstOrNull { index ->
+                                    (list.getChildAt(index) as? TextView)?.text == "📎 ग्राहकांनी अपलोड केलेली कागदपत्रे"
+                                } ?: -1
+                                if (markerIndex >= 0) {
+                                    while (list.childCount > markerIndex + 1) list.removeViewAt(markerIndex + 1)
+                                    val uploaded = uploadResult?.documents.orEmpty()
+                                        .filter { it.getString("storagePath").orEmpty().isNotBlank() }
+                                        .sortedByDescending { it.getTimestamp("createdAt")?.toDate()?.time ?: 0L }
+                                    if (uploaded.isEmpty()) {
+                                        list.addView(TextView(this@MainActivity).apply {
+                                            text = "अद्याप कोणतेही कागदपत्र अपलोड झालेले नाही."
+                                            setTextColor(Color.WHITE)
+                                            setPadding(0, dp(6), 0, dp(12))
+                                        })
+                                    } else uploaded.forEach { fileDoc ->
+                                        val fileCard = LinearLayout(this@MainActivity).apply {
+                                            orientation = LinearLayout.VERTICAL
+                                            setPadding(dp(14), dp(12), dp(14), dp(12))
+                                            background = android.graphics.drawable.GradientDrawable().apply {
+                                                setColor(Color.WHITE); cornerRadius = dp(14).toFloat()
+                                            }
+                                        }
+                                        fileCard.addView(TextView(this@MainActivity).apply {
+                                            text = "📄 ${fileDoc.getString("documentName") ?: "कागदपत्र"}"
+                                            textSize = 17f
+                                            setTypeface(null, android.graphics.Typeface.BOLD)
+                                            setTextColor(dark)
+                                        })
+                                        fileCard.addView(TextView(this@MainActivity).apply {
+                                            text = "ग्राहक: ${fileDoc.getString("customerName") ?: "—"}\nमोबाईल: ${fileDoc.getString("customerMobile") ?: "—"}\nसेवा: ${fileDoc.getString("serviceName") ?: "—"}"
+                                            textSize = 14f
+                                            setTextColor(dark)
+                                            setPadding(0, dp(5), 0, dp(5))
+                                        })
+                                        fileCard.addView(Button(this@MainActivity).apply {
+                                            text = "कागदपत्र उघडा / डाउनलोड करा"
+                                            isAllCaps = false
+                                            setOnClickListener {
+                                                val fileUrl = fileDoc.getString("downloadUrl")
+                                                if (fileUrl.isNullOrBlank()) {
+                                                    Toast.makeText(this@MainActivity, "कागदपत्राची लिंक उपलब्ध नाही.", Toast.LENGTH_LONG).show()
+                                                } else {
+                                                    val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+                                                        setDataAndType(Uri.parse(fileUrl), fileDoc.getString("contentType") ?: "*/*")
+                                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                    }
+                                                    try {
+                                                        startActivity(Intent.createChooser(viewIntent, "कागदपत्र उघडा"))
+                                                    } catch (_: Exception) {
+                                                        Toast.makeText(this@MainActivity, "कागदपत्र उघडण्यासाठी योग्य ॲप उपलब्ध नाही.", Toast.LENGTH_LONG).show()
+                                                    }
+                                                }
+                                            }
+                                        })
+                                        list.addView(fileCard, LinearLayout.LayoutParams(
+                                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+                                        ).apply { bottomMargin = dp(12) })
+                                    }
+                                }
+                            }
+                        }
                 }
                 .addOnFailureListener {
                     list.removeAllViews()
@@ -1006,6 +1086,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun showCustomerDocuments(serviceName: String) {
         activeServiceName = serviceName
+        currentApplicationId = ""
         recordScreen("customer_documents")
         val page = basePage()
         addHeading(page, serviceName, "सेवा अर्ज व कागदपत्रे")
@@ -1041,7 +1122,8 @@ class MainActivity : AppCompatActivity() {
                 if (user == null) {
                     Toast.makeText(this, "कृपया पुन्हा लॉगिन करा.", Toast.LENGTH_LONG).show()
                 } else {
-                    db.collection("service_document_uploads").add(mapOf(
+                    val applicationRef = db.collection("service_document_uploads").document()
+                    applicationRef.set(mapOf(
                         "uid" to user.uid,
                         "recordType" to "customer_application",
                         "serviceName" to serviceName,
@@ -1050,7 +1132,8 @@ class MainActivity : AppCompatActivity() {
                         "status" to "अर्ज प्राप्त",
                         "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
                     )).addOnSuccessListener {
-                        Toast.makeText(this, "अर्जाची माहिती जतन झाली.", Toast.LENGTH_LONG).show()
+                        currentApplicationId = applicationRef.id
+                        Toast.makeText(this, "अर्जाची माहिती जतन झाली. आता कागदपत्रे अपलोड करा.", Toast.LENGTH_LONG).show()
                     }.addOnFailureListener {
                         Toast.makeText(this, firestoreErrorMessage(it), Toast.LENGTH_LONG).show()
                     }
@@ -1124,6 +1207,10 @@ class MainActivity : AppCompatActivity() {
                         text = "अपलोड करा"
                         isAllCaps = false
                         setOnClickListener {
+                            if (currentApplicationId.isBlank()) {
+                                Toast.makeText(this@MainActivity, "आधी ग्राहकाची माहिती जतन करा.", Toast.LENGTH_LONG).show()
+                                return@setOnClickListener
+                            }
                             pendingDocumentName = name
                             val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                                 addCategory(Intent.CATEGORY_OPENABLE)
@@ -1308,6 +1395,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun uploadCustomerDocument(uri: Uri, documentName: String, serviceName: String) {
         val user = auth.currentUser ?: return
+        if (currentApplicationId.isBlank()) {
+            Toast.makeText(this, "आधी ग्राहकाची माहिती जतन करा.", Toast.LENGTH_LONG).show()
+            return
+        }
         val mime = contentResolver.getType(uri).orEmpty()
         if (mime !in listOf("application/pdf", "image/jpeg", "image/png")) {
             Toast.makeText(this, "फक्त PDF, JPG किंवा PNG निवडा.", Toast.LENGTH_LONG).show(); return
@@ -1326,7 +1417,9 @@ class MainActivity : AppCompatActivity() {
             ref.downloadUrl
         }.addOnSuccessListener { download ->
             db.collection("service_document_uploads").add(mapOf(
-                "uid" to user.uid, "serviceName" to serviceName, "documentName" to documentName,
+                "uid" to user.uid, "recordType" to "customer_document",
+                "applicationId" to currentApplicationId,
+                "serviceName" to serviceName, "documentName" to documentName,
                 "customerName" to currentCustomerName, "customerMobile" to currentCustomerMobile,
                 "storagePath" to objectPath, "downloadUrl" to download.toString(), "contentType" to mime,
                 "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
