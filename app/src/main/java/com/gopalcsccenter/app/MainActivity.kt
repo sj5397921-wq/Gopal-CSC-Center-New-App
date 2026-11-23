@@ -58,6 +58,7 @@ class MainActivity : AppCompatActivity() {
                 "customer_welcome" -> showCustomerWelcome()
                 "admin_welcome" -> showAdminWelcome()
                 "admin_documents" -> showAdminDocuments(activeServiceName)
+                "admin_fee" -> showAdminWelcome()
                 "customer_documents" -> showCustomerDocuments(activeServiceName)
                 else -> showHome()
             }
@@ -717,6 +718,7 @@ class MainActivity : AppCompatActivity() {
                             }.show()
                     })
                     addAction(items, "📄 कागदपत्रे व्यवस्थापन") { showAdminDocuments(service["mr"].orEmpty()) }
+                    addAction(items, "₹ सेवा शुल्क सेट करा") { showAdminFee(service["mr"].orEmpty()) }
                 }
             }
         }
@@ -792,6 +794,42 @@ class MainActivity : AppCompatActivity() {
         setContentView(ScrollView(this).apply { isFillViewport = true; addView(page) })
     }
 
+    private fun showAdminFee(serviceName: String) {
+        if (auth.currentUser?.email != adminEmail) {
+            Toast.makeText(this, "फक्त Admin शुल्क बदलू शकतो.", Toast.LENGTH_LONG).show()
+            return
+        }
+        activeServiceName = serviceName
+        recordScreen("admin_fee")
+        val page = basePage()
+        addHeading(page, "सेवा शुल्क व्यवस्थापन", serviceName)
+        val feeField = addField(page, "सेवा शुल्क रुपये मध्ये टाका", InputType.TYPE_CLASS_NUMBER)
+        val ref = db.collection("service_fees").document(serviceDocumentKey(serviceName))
+        ref.get().addOnSuccessListener { snap ->
+            val amount = snap.getLong("amount") ?: 0L
+            if (amount > 0L) feeField.setText(amount.toString())
+        }.addOnFailureListener {
+            Toast.makeText(this, firestoreErrorMessage(it), Toast.LENGTH_LONG).show()
+        }
+        addAction(page, "शुल्क जतन करा") {
+            val amount = feeField.text.toString().trim().toLongOrNull()
+            if (amount == null || amount < 0L) {
+                feeField.error = "योग्य शुल्क टाका"
+            } else {
+                ref.set(mapOf("serviceName" to serviceName, "amount" to amount))
+                    .addOnSuccessListener {
+                        Toast.makeText(this, "सेवा शुल्क जतन झाले.", Toast.LENGTH_SHORT).show()
+                        showAdminWelcome()
+                    }
+                    .addOnFailureListener {
+                        Toast.makeText(this, firestoreErrorMessage(it), Toast.LENGTH_LONG).show()
+                    }
+            }
+        }
+        addAction(page, "मागे जा") { showAdminWelcome() }
+        setContentView(ScrollView(this).apply { isFillViewport = true; addView(page) })
+    }
+
     private fun saveServiceDocuments(serviceName: String, docs: List<String>, done: () -> Unit) {
         db.collection("service_documents").document(serviceDocumentKey(serviceName))
             .set(mapOf("serviceName" to serviceName, "documents" to docs))
@@ -803,29 +841,156 @@ class MainActivity : AppCompatActivity() {
         activeServiceName = serviceName
         recordScreen("customer_documents")
         val page = basePage()
-        addHeading(page, serviceName, "आवश्यक कागदपत्रे")
-        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        page.addView(list)
+        addHeading(page, serviceName, "सेवा अर्ज व कागदपत्रे")
+
+        fun sectionTitle(title: String) {
+            page.addView(TextView(this).apply {
+                text = title
+                textSize = 19f
+                setTextColor(Color.WHITE)
+                setTypeface(null, android.graphics.Typeface.BOLD)
+                setPadding(0, dp(18), 0, dp(8))
+            })
+        }
+
+        // 1. Required documents checklist
+        sectionTitle("1. आवश्यक कागदपत्रे यादी")
+        val checklist = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(Color.WHITE); cornerRadius = dp(12).toFloat()
+            }
+        }
+        page.addView(checklist)
         db.collection("service_documents").document(serviceDocumentKey(serviceName)).get()
             .addOnSuccessListener { snap ->
                 val docs = (snap.get("documents") as? List<*>)?.mapNotNull { it?.toString() }.orEmpty()
-                if (docs.isEmpty()) list.addView(TextView(this).apply {
-                    text = "Admin ने अद्याप कागदपत्रांची यादी दिलेली नाही."; setTextColor(Color.WHITE)
-                })
-                docs.forEach { name ->
-                    val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(10), dp(12), dp(10)); background = android.graphics.drawable.GradientDrawable().apply { setColor(Color.WHITE); cornerRadius = dp(12).toFloat() } }
-                    card.addView(TextView(this).apply { text = "📄 $name"; textSize = 16f; setTextColor(dark) })
-                    addAction(card, "कागदपत्र अपलोड करा") {
-                        pendingDocumentName = name
-                        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                            addCategory(Intent.CATEGORY_OPENABLE); type = "*/*"
-                            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/pdf", "image/jpeg", "image/png"))
-                        }
-                        startActivityForResult(intent, filePickerRequestCode)
-                    }
-                    list.addView(card)
+                checklist.removeAllViews()
+                if (docs.isEmpty()) {
+                    checklist.addView(TextView(this).apply {
+                        text = "Admin ने अद्याप कागदपत्रांची यादी दिलेली नाही."
+                        setTextColor(dark)
+                    })
+                } else docs.forEachIndexed { index, name ->
+                    checklist.addView(TextView(this).apply {
+                        text = "☐  ${index + 1}. $name"
+                        textSize = 16f
+                        setTextColor(dark)
+                        setPadding(dp(4), dp(7), dp(4), dp(7))
+                    })
                 }
-            }.addOnFailureListener { Toast.makeText(this, firestoreErrorMessage(it), Toast.LENGTH_LONG).show() }
+            }
+            .addOnFailureListener {
+                Toast.makeText(this, firestoreErrorMessage(it), Toast.LENGTH_LONG).show()
+            }
+
+        // 2. Separate upload area
+        sectionTitle("2. कागदपत्रे अपलोड सुविधा")
+        val uploads = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(Color.WHITE); cornerRadius = dp(12).toFloat()
+            }
+        }
+        page.addView(uploads)
+        db.collection("service_documents").document(serviceDocumentKey(serviceName)).get()
+            .addOnSuccessListener { snap ->
+                val docs = (snap.get("documents") as? List<*>)?.mapNotNull { it?.toString() }.orEmpty()
+                uploads.removeAllViews()
+                if (docs.isEmpty()) {
+                    uploads.addView(TextView(this).apply {
+                        text = "अपलोड करण्यासाठी कागदपत्रे उपलब्ध नाहीत."
+                        setTextColor(dark)
+                    })
+                } else docs.forEach { name ->
+                    val row = LinearLayout(this).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = Gravity.CENTER_VERTICAL
+                        setPadding(dp(4), dp(5), dp(4), dp(5))
+                    }
+                    row.addView(TextView(this).apply {
+                        text = "📄 $name"
+                        textSize = 15f
+                        setTextColor(dark)
+                    }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                    row.addView(Button(this).apply {
+                        text = "अपलोड करा"
+                        isAllCaps = false
+                        setOnClickListener {
+                            pendingDocumentName = name
+                            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                                addCategory(Intent.CATEGORY_OPENABLE)
+                                type = "*/*"
+                                putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/pdf", "image/jpeg", "image/png"))
+                            }
+                            startActivityForResult(intent, filePickerRequestCode)
+                        }
+                    })
+                    uploads.addView(row)
+                }
+            }
+            .addOnFailureListener {
+                Toast.makeText(this, firestoreErrorMessage(it), Toast.LENGTH_LONG).show()
+            }
+
+        // 3. Automatically calculated quotation using Admin-configured fee
+        sectionTitle("3. कोटेशन बिल")
+        val quotation = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(14), dp(16), dp(14))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(Color.WHITE)
+                cornerRadius = dp(14).toFloat()
+                setStroke(dp(1), Color.rgb(220, 226, 240))
+            }
+        }
+        page.addView(quotation)
+        quotation.addView(TextView(this).apply {
+            text = "गोपाल CSC सेंटर"
+            textSize = 18f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setTextColor(dark)
+        })
+        quotation.addView(TextView(this).apply {
+            text = "सेवा: $serviceName"
+            textSize = 15f
+            setTextColor(dark)
+            setPadding(0, dp(8), 0, dp(8))
+        })
+        val feeLine = TextView(this).apply {
+            text = "सेवा शुल्क: शुल्क लोड होत आहे..."
+            textSize = 17f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setTextColor(blue)
+        }
+        quotation.addView(feeLine)
+        quotation.addView(TextView(this).apply {
+            text = "एकूण रक्कम"
+            textSize = 14f
+            setTextColor(dark)
+            setPadding(0, dp(12), 0, 0)
+        })
+        val totalLine = TextView(this).apply {
+            text = "₹ --"
+            textSize = 25f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setTextColor(Color.rgb(20, 130, 75))
+        }
+        quotation.addView(totalLine)
+        db.collection("service_fees").document(serviceDocumentKey(serviceName)).get()
+            .addOnSuccessListener { snap ->
+                val amount = snap.getLong("amount") ?: 0L
+                feeLine.text = "सेवा शुल्क: ₹ $amount"
+                totalLine.text = "₹ $amount"
+            }
+            .addOnFailureListener {
+                feeLine.text = "सेवा शुल्क उपलब्ध नाही."
+                totalLine.text = "₹ --"
+                Toast.makeText(this, firestoreErrorMessage(it), Toast.LENGTH_LONG).show()
+            }
+
         addAction(page, "मागे जा") { showCustomerWelcome() }
         setContentView(ScrollView(this).apply { isFillViewport = true; addView(page) })
     }
