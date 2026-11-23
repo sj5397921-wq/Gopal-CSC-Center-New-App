@@ -12,6 +12,7 @@ on:
       - feature/application-status
       - feature/admin-document-inbox
       - fix/restore-legacy-document-upload
+      - feature/jiocloud-upload-investigation
 
 jobs:
   build:
