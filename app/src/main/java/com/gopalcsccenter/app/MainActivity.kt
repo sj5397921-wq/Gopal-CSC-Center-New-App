@@ -30,6 +30,8 @@ class MainActivity : AppCompatActivity() {
     private var serviceListener: ListenerRegistration? = null
     private var activeServiceName: String = ""
     private var pendingDocumentName: String = ""
+    private var currentCustomerName: String = ""
+    private var currentCustomerMobile: String = ""
     private val storage by lazy { FirebaseStorage.getInstance() }
     private val adminEmail = "636657750019@gopalcsccenter.app"
     private val filePickerRequestCode = 741
@@ -860,8 +862,45 @@ class MainActivity : AppCompatActivity() {
             })
         }
 
-        // 1. Required documents checklist
-        sectionTitle("1. आवश्यक कागदपत्रे यादी")
+        // Customer application details
+        sectionTitle("1. ग्राहकाची माहिती")
+        val customerNameField = addField(page, "ग्राहकाचे पूर्ण नाव")
+        val customerMobileField = addField(
+            page, "10 अंकी मोबाईल नंबर",
+            InputType.TYPE_CLASS_NUMBER, 10
+        )
+        addAction(page, "अर्जाची माहिती जतन करा") {
+            val customerName = customerNameField.text.toString().trim()
+            val customerMobile = customerMobileField.text.toString().trim()
+            if (customerName.isBlank()) {
+                customerNameField.error = "ग्राहकाचे पूर्ण नाव टाका"
+            } else if (!customerMobile.matches(Regex("^[0-9]{10}$"))) {
+                customerMobileField.error = "योग्य 10 अंकी मोबाईल नंबर टाका"
+            } else {
+                currentCustomerName = customerName
+                currentCustomerMobile = customerMobile
+                val user = auth.currentUser
+                if (user == null) {
+                    Toast.makeText(this, "कृपया पुन्हा लॉगिन करा.", Toast.LENGTH_LONG).show()
+                } else {
+                    db.collection("service_document_uploads").add(mapOf(
+                        "uid" to user.uid,
+                        "recordType" to "customer_application",
+                        "serviceName" to serviceName,
+                        "customerName" to customerName,
+                        "customerMobile" to customerMobile,
+                        "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                    )).addOnSuccessListener {
+                        Toast.makeText(this, "अर्जाची माहिती जतन झाली.", Toast.LENGTH_LONG).show()
+                    }.addOnFailureListener {
+                        Toast.makeText(this, firestoreErrorMessage(it), Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        }
+
+        // 2. Required documents checklist
+        sectionTitle("2. आवश्यक कागदपत्रे यादी")
         val checklist = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(12), dp(10), dp(12), dp(10))
@@ -892,8 +931,8 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(this, firestoreErrorMessage(it), Toast.LENGTH_LONG).show()
             }
 
-        // 2. Separate upload area
-        sectionTitle("2. कागदपत्रे अपलोड सुविधा")
+        // 3. Separate upload area
+        sectionTitle("3. कागदपत्रे अपलोड सुविधा")
         val uploads = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(12), dp(10), dp(12), dp(10))
@@ -942,8 +981,8 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(this, firestoreErrorMessage(it), Toast.LENGTH_LONG).show()
             }
 
-        // 3. Automatically calculated quotation using Admin-configured fee
-        sectionTitle("3. कोटेशन बिल")
+        // 4. Automatically calculated quotation using Admin-configured fee
+        sectionTitle("4. कोटेशन बिल")
         val quotation = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(14), dp(16), dp(14))
@@ -989,10 +1028,18 @@ class MainActivity : AppCompatActivity() {
 
         addAction(page, "PDF कोटेशन तयार करा") {
             val amount = totalLine.text.toString().removePrefix("₹").trim().toLongOrNull()
-            if (amount == null) {
+            val customerName = customerNameField.text.toString().trim()
+            val customerMobile = customerMobileField.text.toString().trim()
+            if (customerName.isBlank()) {
+                customerNameField.error = "ग्राहकाचे पूर्ण नाव टाका"
+            } else if (!customerMobile.matches(Regex("^[0-9]{10}$"))) {
+                customerMobileField.error = "योग्य 10 अंकी मोबाईल नंबर टाका"
+            } else if (amount == null) {
                 Toast.makeText(this, "आधी सेवा शुल्क लोड होऊ द्या.", Toast.LENGTH_LONG).show()
             } else {
-                createQuotationPdf(serviceName, amount)?.let { pdfUri ->
+                currentCustomerName = customerName
+                currentCustomerMobile = customerMobile
+                createQuotationPdf(serviceName, amount, customerName, customerMobile)?.let { pdfUri ->
                     val viewIntent = Intent(Intent.ACTION_VIEW).apply {
                         setDataAndType(pdfUri, "application/pdf")
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -1007,14 +1054,22 @@ class MainActivity : AppCompatActivity() {
         }
         addAction(page, "कोटेशन Share करा") {
             val amount = totalLine.text.toString().removePrefix("₹").trim().toLongOrNull()
-            if (amount == null) {
+            val customerName = customerNameField.text.toString().trim()
+            val customerMobile = customerMobileField.text.toString().trim()
+            if (customerName.isBlank()) {
+                customerNameField.error = "ग्राहकाचे पूर्ण नाव टाका"
+            } else if (!customerMobile.matches(Regex("^[0-9]{10}$"))) {
+                customerMobileField.error = "योग्य 10 अंकी मोबाईल नंबर टाका"
+            } else if (amount == null) {
                 Toast.makeText(this, "आधी सेवा शुल्क लोड होऊ द्या.", Toast.LENGTH_LONG).show()
             } else {
-                createQuotationPdf(serviceName, amount)?.let { pdfUri ->
+                currentCustomerName = customerName
+                currentCustomerMobile = customerMobile
+                createQuotationPdf(serviceName, amount, customerName, customerMobile)?.let { pdfUri ->
                     val shareIntent = Intent(Intent.ACTION_SEND).apply {
                         type = "application/pdf"
                         putExtra(Intent.EXTRA_SUBJECT, "Gopal CSC Center - कोटेशन बिल")
-                        putExtra(Intent.EXTRA_TEXT, "गोपाल CSC सेंटर\nसेवा: $serviceName\nएकूण रक्कम: ₹ $amount")
+                        putExtra(Intent.EXTRA_TEXT, "गोपाल CSC सेंटर\nग्राहक: $customerName\nमोबाईल: $customerMobile\nसेवा: $serviceName\nएकूण रक्कम: ₹ $amount")
                         putExtra(Intent.EXTRA_STREAM, pdfUri)
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
@@ -1048,7 +1103,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun createQuotationPdf(serviceName: String, amount: Long): Uri? {
+    private fun createQuotationPdf(serviceName: String, amount: Long, customerName: String, customerMobile: String): Uri? {
         return try {
             val document = PdfDocument()
             val pageInfo = PdfDocument.PageInfo.Builder(595, 842, 1).create()
@@ -1066,15 +1121,17 @@ class MainActivity : AppCompatActivity() {
             canvas.drawLine(48f, 125f, 547f, 125f, paint)
             val dateText = SimpleDateFormat("dd-MM-yyyy HH:mm", Locale.getDefault()).format(Date())
             canvas.drawText("Date: $dateText", 48f, 165f, paint)
-            canvas.drawText("Service: $serviceName", 48f, 210f, paint)
-            canvas.drawLine(48f, 245f, 547f, 245f, paint)
+            canvas.drawText("Customer: $customerName", 48f, 200f, paint)
+            canvas.drawText("Mobile: $customerMobile", 48f, 230f, paint)
+            canvas.drawText("Service: $serviceName", 48f, 260f, paint)
+            canvas.drawLine(48f, 285f, 547f, 285f, paint)
             paint.textSize = 18f
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-            canvas.drawText("Service Fee", 48f, 290f, paint)
-            canvas.drawText("INR $amount", 420f, 290f, paint)
-            canvas.drawLine(48f, 315f, 547f, 315f, paint)
+            canvas.drawText("Service Fee", 48f, 330f, paint)
+            canvas.drawText("INR $amount", 420f, 330f, paint)
+            canvas.drawLine(48f, 355f, 547f, 355f, paint)
             paint.textSize = 22f
-            canvas.drawText("Total: INR $amount", 48f, 365f, paint)
+            canvas.drawText("Total: INR $amount", 48f, 405f, paint)
             paint.textSize = 13f
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
             canvas.drawText("Thank you for choosing Gopal CSC Center.", 48f, 430f, paint)
@@ -1111,6 +1168,7 @@ class MainActivity : AppCompatActivity() {
         }.addOnSuccessListener { download ->
             db.collection("service_document_uploads").add(mapOf(
                 "uid" to user.uid, "serviceName" to serviceName, "documentName" to documentName,
+                "customerName" to currentCustomerName, "customerMobile" to currentCustomerMobile,
                 "storagePath" to objectPath, "downloadUrl" to download.toString(), "contentType" to mime,
                 "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
             )).addOnSuccessListener {
