@@ -1108,6 +1108,20 @@ class MainActivity : AppCompatActivity() {
             page, "10 अंकी मोबाईल नंबर",
             InputType.TYPE_CLASS_NUMBER, 10
         )
+        customerNameField.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                currentCustomerName = s?.toString()?.trim().orEmpty()
+            }
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        })
+        customerMobileField.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                currentCustomerMobile = s?.toString()?.trim().orEmpty()
+            }
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        })
         // Allocate an application ID locally; the application itself is saved only at the end.
         currentApplicationId = db.collection("service_document_uploads").document().id
         currentCustomerName = ""
@@ -1179,18 +1193,6 @@ class MainActivity : AppCompatActivity() {
                         text = "अपलोड करा"
                         isAllCaps = false
                         setOnClickListener {
-                            val customerName = customerNameField.text.toString().trim()
-                            val customerMobile = customerMobileField.text.toString().trim()
-                            if (customerName.isBlank()) {
-                                customerNameField.error = "ग्राहकाचे पूर्ण नाव टाका"
-                                return@setOnClickListener
-                            }
-                            if (!customerMobile.matches(Regex("^[0-9]{10}$"))) {
-                                customerMobileField.error = "योग्य 10 अंकी मोबाईल नंबर टाका"
-                                return@setOnClickListener
-                            }
-                            currentCustomerName = customerName
-                            currentCustomerMobile = customerMobile
                             pendingDocumentName = name
                             val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                                 addCategory(Intent.CATEGORY_OPENABLE)
@@ -1402,25 +1404,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun uploadCustomerDocument(uri: Uri, documentName: String, serviceName: String) {
         val user = auth.currentUser ?: return
-        val reportedMime = contentResolver.getType(uri).orEmpty().lowercase(Locale.ROOT)
-        val mime = when (reportedMime) {
-            "application/pdf", "image/jpeg", "image/png" -> reportedMime
-            else -> {
-                val name = runCatching {
-                    contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
-                        if (cursor.moveToFirst()) cursor.getString(0).orEmpty() else ""
-                    }.orEmpty()
-                }.getOrDefault("")
-                when (name.substringAfterLast('.', "").lowercase(Locale.ROOT)) {
-                    "pdf" -> "application/pdf"
-                    "jpg", "jpeg" -> "image/jpeg"
-                    "png" -> "image/png"
-                    else -> ""
-                }
-            }
-        }
+        val mime = contentResolver.getType(uri).orEmpty()
         if (mime !in listOf("application/pdf", "image/jpeg", "image/png")) {
-            Toast.makeText(this, "फाइलचा प्रकार ओळखता आला नाही. PDF, JPG किंवा PNG निवडा.", Toast.LENGTH_LONG).show(); return
+            Toast.makeText(this, "फक्त PDF, JPG किंवा PNG निवडा.", Toast.LENGTH_LONG).show(); return
         }
         val size = contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize } ?: -1L
         if (size > 10L * 1024L * 1024L) {
@@ -1436,9 +1422,7 @@ class MainActivity : AppCompatActivity() {
             ref.downloadUrl
         }.addOnSuccessListener { download ->
             db.collection("service_document_uploads").add(mapOf(
-                "uid" to user.uid, "recordType" to "customer_document",
-                "applicationId" to currentApplicationId,
-                "serviceName" to serviceName, "documentName" to documentName,
+                "uid" to user.uid, "serviceName" to serviceName, "documentName" to documentName,
                 "customerName" to currentCustomerName, "customerMobile" to currentCustomerMobile,
                 "storagePath" to objectPath, "downloadUrl" to download.toString(), "contentType" to mime,
                 "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
@@ -1447,21 +1431,7 @@ class MainActivity : AppCompatActivity() {
             }.addOnFailureListener {
                 Toast.makeText(this, "फाइल अपलोड झाली; नोंद जतन झाली नाही.", Toast.LENGTH_LONG).show()
             }
-        }.addOnFailureListener { error ->
-            val detail = when (error) {
-                is com.google.firebase.storage.StorageException -> when (error.errorCode) {
-                    com.google.firebase.storage.StorageException.ERROR_BUCKET_NOT_FOUND ->
-                        "Firebase Storage bucket सापडत नाही. Firebase Console मध्ये Storage सुरू करा."
-                    com.google.firebase.storage.StorageException.ERROR_NOT_AUTHENTICATED ->
-                        "लॉगिन कालबाह्य झाले. पुन्हा लॉगिन करा."
-                    com.google.firebase.storage.StorageException.ERROR_NOT_AUTHORIZED ->
-                        "Storage Rules मुळे परवानगी नाकारली. Firebase Storage Rules तपासा."
-                    else -> "Storage त्रुटी code ${error.errorCode}: ${error.localizedMessage}"
-                }
-                else -> error.localizedMessage ?: "अज्ञात त्रुटी"
-            }
-            Toast.makeText(this, "अपलोड अयशस्वी: $detail", Toast.LENGTH_LONG).show()
-        }
+        }.addOnFailureListener { Toast.makeText(this, "अपलोड अयशस्वी: " + it.localizedMessage, Toast.LENGTH_LONG).show() }
     }
 
 }
