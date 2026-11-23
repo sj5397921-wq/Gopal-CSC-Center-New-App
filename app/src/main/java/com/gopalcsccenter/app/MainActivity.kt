@@ -1428,3 +1428,4 @@ class MainActivity : AppCompatActivity() {
     }
 
 }
+// Legacy customer document upload compatibility retained for Admin inbox.
