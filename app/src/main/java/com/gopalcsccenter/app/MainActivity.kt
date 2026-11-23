@@ -3,6 +3,13 @@ package com.gopalcsccenter.app
 import android.os.Bundle
 import android.content.Intent
 import android.net.Uri
+import java.io.File
+import java.io.FileOutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import android.graphics.pdf.PdfDocument
+import androidx.core.content.FileProvider
 import android.util.Base64
 import com.google.firebase.storage.FirebaseStorage
 import android.text.InputFilter
@@ -979,6 +986,43 @@ class MainActivity : AppCompatActivity() {
             setTextColor(Color.rgb(20, 130, 75))
         }
         quotation.addView(totalLine)
+
+        addAction(page, "PDF कोटेशन तयार करा") {
+            val amount = totalLine.text.toString().removePrefix("₹").trim().toLongOrNull()
+            if (amount == null) {
+                Toast.makeText(this, "आधी सेवा शुल्क लोड होऊ द्या.", Toast.LENGTH_LONG).show()
+            } else {
+                createQuotationPdf(serviceName, amount)?.let { pdfUri ->
+                    val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(pdfUri, "application/pdf")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    try {
+                        startActivity(Intent.createChooser(viewIntent, "कोटेशन PDF उघडा"))
+                    } catch (_: Exception) {
+                        Toast.makeText(this, "PDF तयार झाला; शेअर पर्याय वापरा.", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        }
+        addAction(page, "कोटेशन Share करा") {
+            val amount = totalLine.text.toString().removePrefix("₹").trim().toLongOrNull()
+            if (amount == null) {
+                Toast.makeText(this, "आधी सेवा शुल्क लोड होऊ द्या.", Toast.LENGTH_LONG).show()
+            } else {
+                createQuotationPdf(serviceName, amount)?.let { pdfUri ->
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "application/pdf"
+                        putExtra(Intent.EXTRA_SUBJECT, "Gopal CSC Center - कोटेशन बिल")
+                        putExtra(Intent.EXTRA_TEXT, "गोपाल CSC सेंटर\nसेवा: $serviceName\nएकूण रक्कम: ₹ $amount")
+                        putExtra(Intent.EXTRA_STREAM, pdfUri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    startActivity(Intent.createChooser(shareIntent, "कोटेशन शेअर करा"))
+                }
+            }
+        }
+
         db.collection("service_fees").document(serviceDocumentKey(serviceName)).get()
             .addOnSuccessListener { snap ->
                 val amount = snap.getLong("amount") ?: 0L
@@ -1001,6 +1045,48 @@ class MainActivity : AppCompatActivity() {
         if (requestCode == filePickerRequestCode && resultCode == RESULT_OK) {
             val uri = data?.data ?: return
             uploadCustomerDocument(uri, pendingDocumentName, activeServiceName)
+        }
+    }
+
+    private fun createQuotationPdf(serviceName: String, amount: Long): Uri? {
+        return try {
+            val document = PdfDocument()
+            val pageInfo = PdfDocument.PageInfo.Builder(595, 842, 1).create()
+            val page = document.startPage(pageInfo)
+            val canvas = page.canvas
+            val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.BLACK
+                textSize = 22f
+                typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+            }
+            canvas.drawText("Gopal CSC Center", 48f, 70f, paint)
+            paint.textSize = 15f
+            paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
+            canvas.drawText("Quotation Bill", 48f, 105f, paint)
+            canvas.drawLine(48f, 125f, 547f, 125f, paint)
+            val dateText = SimpleDateFormat("dd-MM-yyyy HH:mm", Locale.getDefault()).format(Date())
+            canvas.drawText("Date: $dateText", 48f, 165f, paint)
+            canvas.drawText("Service: $serviceName", 48f, 210f, paint)
+            canvas.drawLine(48f, 245f, 547f, 245f, paint)
+            paint.textSize = 18f
+            paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+            canvas.drawText("Service Fee", 48f, 290f, paint)
+            canvas.drawText("INR $amount", 420f, 290f, paint)
+            canvas.drawLine(48f, 315f, 547f, 315f, paint)
+            paint.textSize = 22f
+            canvas.drawText("Total: INR $amount", 48f, 365f, paint)
+            paint.textSize = 13f
+            paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
+            canvas.drawText("Thank you for choosing Gopal CSC Center.", 48f, 430f, paint)
+            document.finishPage(page)
+            val outputDir = File(cacheDir, "quotation_bills").apply { mkdirs() }
+            val outputFile = File(outputDir, "quotation_\${System.currentTimeMillis()}.pdf")
+            FileOutputStream(outputFile).use { document.writeTo(it) }
+            document.close()
+            FileProvider.getUriForFile(this, "\$packageName.fileprovider", outputFile)
+        } catch (error: Exception) {
+            Toast.makeText(this, "PDF तयार करता आला नाही: \${error.localizedMessage}", Toast.LENGTH_LONG).show()
+            null
         }
     }
 
