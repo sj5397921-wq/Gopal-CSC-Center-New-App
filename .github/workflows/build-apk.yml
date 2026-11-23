@@ -8,22 +8,20 @@ on:
       - fresh-customer-admin-start
       - version-1.97-add-11-services
       - feature/document-checklist
+      - feature/app-logo
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-
       - name: Check release signing secrets
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -38,7 +36,6 @@ jobs:
           mkdir -p app/keystore
           echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > app/keystore/release-keystore.jks
           test -s app/keystore/release-keystore.jks
-
       - name: Build signed release APK
         env:
           ANDROID_KEYSTORE_FILE: keystore/release-keystore.jks
@@ -47,16 +44,12 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
         run: gradle --stacktrace --no-daemon assembleRelease
-
       - name: Verify APK signature and package
         run: |
           $ANDROID_HOME/build-tools/35.0.0/apksigner verify --verbose app/build/outputs/apk/release/app-release.apk
           $ANDROID_HOME/build-tools/35.0.0/aapt dump badging app/build/outputs/apk/release/app-release.apk
-
       - uses: actions/upload-artifact@v4
         if: success()
         with:
           name: Gopal-CSC-Center-Release-APK
           path: app/build/outputs/apk/release/*.apk
-
-# Trigger build for service-fee and quotation update.
