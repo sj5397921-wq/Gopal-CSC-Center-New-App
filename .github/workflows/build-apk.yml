@@ -10,6 +10,7 @@ on:
       - feature/document-checklist
       - feature/app-logo
       - feature/application-status
+      - feature/admin-document-inbox
 
 jobs:
   build:
