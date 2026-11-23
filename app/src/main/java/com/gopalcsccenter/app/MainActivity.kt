@@ -1173,7 +1173,7 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(this, firestoreErrorMessage(it), Toast.LENGTH_LONG).show()
             }
 
-        // 3. Separate upload area
+        // 3. Separate upload area. Uploaded files are mirrored to the Admin live inbox.
         sectionTitle("3. कागदपत्रे अपलोड सुविधा")
         val uploads = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
