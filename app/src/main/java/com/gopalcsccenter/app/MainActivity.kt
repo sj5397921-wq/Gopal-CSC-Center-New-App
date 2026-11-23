@@ -825,7 +825,7 @@ class MainActivity : AppCompatActivity() {
         addHeading(page, "अर्ज व्यवस्थापन", "ग्राहकांचे अर्ज व स्थिती अपडेट")
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         page.addView(list)
-        val statuses = arrayOf("अर्ज प्राप्त", "कागदपत्रे तपासणी सुरू", "प्रक्रियेत", "अधिक माहिती आवश्यक", "पूर्ण झाले", "रद्द")
+        val statuses = arrayOf("अर्ज प्राप्त", "कागदपत्रे तपासणी सुरू", "प्रक्रियेत", "अधिक माहिती आवश्यक", "रद्द")
         fun loadApplications() {
             documentUploadListener?.remove()
             documentUploadListener = null
@@ -868,6 +868,20 @@ class MainActivity : AppCompatActivity() {
                             textSize = 15f; setTypeface(null, android.graphics.Typeface.BOLD); setTextColor(Color.rgb(20, 130, 75))
                         }
                         card.addView(statusView)
+                        card.addView(Button(this).apply {
+                            text = "काम पूर्ण झाले"
+                            isAllCaps = false
+                            setOnClickListener {
+                                android.app.AlertDialog.Builder(this@MainActivity)
+                                    .setTitle("काम पूर्ण झाल्याची खात्री")
+                                    .setMessage("ग्राहकाचे काम पूर्ण झाले आहे. सर्व अपलोड केलेली कागदपत्रे कायमची डिलीट करायची आहेत?")
+                                    .setNegativeButton("नाही, रद्द करा", null)
+                                    .setPositiveButton("होय, डिलीट करा") { _, _ ->
+                                        completeApplicationAndDeleteDocuments(doc) { loadApplications() }
+                                    }
+                                    .show()
+                            }
+                        })
                         card.addView(Button(this).apply {
                             text = "स्थिती बदला"; isAllCaps = false
                             setOnClickListener {
@@ -978,6 +992,90 @@ class MainActivity : AppCompatActivity() {
         addAction(page, "मागे जा") { showAdminWelcome() }
         loadApplications()
         setContentView(ScrollView(this).apply { isFillViewport = true; addView(page) })
+    }
+
+    private fun completeApplicationAndDeleteDocuments(
+        application: com.google.firebase.firestore.DocumentSnapshot,
+        onFinished: () -> Unit
+    ) {
+        if (auth.currentUser?.email != adminEmail) {
+            Toast.makeText(this, "फक्त Admin हे काम करू शकतो.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val applicationId = application.id
+        val filesQuery = db.collection("service_document_uploads")
+            .whereEqualTo("applicationId", applicationId)
+
+        Toast.makeText(this, "कागदपत्रे डिलीट करण्याची प्रक्रिया सुरू झाली...", Toast.LENGTH_SHORT).show()
+        filesQuery.get().addOnSuccessListener { result ->
+            val files = result.documents.filter { it.getString("storagePath").orEmpty().isNotBlank() }
+            var index = 0
+            var deletedCount = 0
+            var failedCount = 0
+
+            fun processNextFile() {
+                if (index >= files.size) {
+                    if (failedCount > 0) {
+                        Toast.makeText(
+                            this,
+                            "$deletedCount कागदपत्रे डिलीट झाली; $failedCount डिलीट झाली नाहीत. उरलेली कागदपत्रे पुन्हा प्रयत्नासाठी उपलब्ध राहतील.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                        onFinished()
+                        return
+                    }
+                    application.reference.update(
+                        "status", "पूर्ण झाले",
+                        "statusUpdatedAt", com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                        "documentsDeletedAt", com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                        "documentsDeletedByAdmin", auth.currentUser?.uid.orEmpty(),
+                        "documentsDeletionConfirmed", true
+                    ).addOnSuccessListener {
+                        Toast.makeText(
+                            this,
+                            "काम पूर्ण झाले. $deletedCount कागदपत्रे कायमची डिलीट झाली.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                        onFinished()
+                    }.addOnFailureListener { error ->
+                        Toast.makeText(
+                            this,
+                            "कागदपत्रे डिलीट झाली; पण अर्जाची स्थिती अपडेट झाली नाही: ${error.localizedMessage}",
+                            Toast.LENGTH_LONG
+                        ).show()
+                        onFinished()
+                    }
+                    return
+                }
+
+                val fileDoc = files[index++]
+                val storagePath = fileDoc.getString("storagePath").orEmpty()
+                storage.reference.child(storagePath).delete()
+                    .addOnSuccessListener {
+                        fileDoc.reference.delete()
+                            .addOnSuccessListener {
+                                deletedCount++
+                                processNextFile()
+                            }
+                            .addOnFailureListener {
+                                failedCount++
+                                processNextFile()
+                            }
+                    }
+                    .addOnFailureListener {
+                        failedCount++
+                        processNextFile()
+                    }
+            }
+
+            processNextFile()
+        }.addOnFailureListener { error ->
+            Toast.makeText(
+                this,
+                "कागदपत्रांची यादी मिळाली नाही: ${error.localizedMessage}",
+                Toast.LENGTH_LONG
+            ).show()
+        }
     }
 
     private fun serviceDocumentKey(name: String): String =
@@ -1424,6 +1522,7 @@ class MainActivity : AppCompatActivity() {
             db.collection("service_document_uploads").add(mapOf(
                 "uid" to user.uid, "serviceName" to serviceName, "documentName" to documentName,
                 "customerName" to currentCustomerName, "customerMobile" to currentCustomerMobile,
+                "applicationId" to currentApplicationId,
                 "storagePath" to objectPath, "downloadUrl" to download.toString(), "contentType" to mime,
                 "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
             )).addOnSuccessListener {
