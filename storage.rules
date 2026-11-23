@@ -9,6 +9,9 @@ service firebase.storage {
         && request.auth.uid == userId
         && request.resource.size < 10 * 1024 * 1024
         && request.resource.contentType.matches('application/pdf|image/jpeg|image/png');
+      // Admin may permanently delete customer uploads after confirming completion.
+      allow delete: if request.auth != null
+        && request.auth.token.email == "636657750019@gopalcsccenter.app";
     }
   }
 }
