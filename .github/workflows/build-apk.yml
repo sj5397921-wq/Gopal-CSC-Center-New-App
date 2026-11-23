@@ -58,3 +58,5 @@ jobs:
         with:
           name: Gopal-CSC-Center-Release-APK
           path: app/build/outputs/apk/release/*.apk
+
+# Trigger build for service-fee and quotation update.
