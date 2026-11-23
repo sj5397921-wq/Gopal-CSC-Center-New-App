@@ -1,6 +1,10 @@
 package com.gopalcsccenter.app
 
 import android.os.Bundle
+import android.content.Intent
+import android.net.Uri
+import android.util.Base64
+import com.google.firebase.storage.FirebaseStorage
 import android.text.InputFilter
 import android.text.InputType
 import android.graphics.Color
@@ -17,6 +21,11 @@ class MainActivity : AppCompatActivity() {
     private val auth: FirebaseAuth by lazy { FirebaseAuth.getInstance() }
     private val db: FirebaseFirestore by lazy { FirebaseFirestore.getInstance() }
     private var serviceListener: ListenerRegistration? = null
+    private var activeServiceName: String = ""
+    private var pendingDocumentName: String = ""
+    private val storage by lazy { FirebaseStorage.getInstance() }
+    private val adminEmail = "636657750019@gopalcsccenter.app"
+    private val filePickerRequestCode = 741
     private val blue = Color.rgb(22, 91, 166)
     private val dark = Color.rgb(35, 48, 64)
 
@@ -48,6 +57,8 @@ class MainActivity : AppCompatActivity() {
                 "admin_login" -> showAdminLogin()
                 "customer_welcome" -> showCustomerWelcome()
                 "admin_welcome" -> showAdminWelcome()
+                "admin_documents" -> showAdminDocuments(activeServiceName)
+                "customer_documents" -> showCustomerDocuments(activeServiceName)
                 else -> showHome()
             }
         } else if (currentScreen != "home") {
@@ -507,7 +518,7 @@ class MainActivity : AppCompatActivity() {
     private fun serviceLabel(item: Map<String, String>): String =
         item[when (languageIndex) { 1 -> "en"; 2 -> "hi"; else -> "mr" }] ?: item["mr"].orEmpty()
 
-    private fun renderServiceRow(parent: LinearLayout, item: Map<String, String>, index: Int, deleteAction: (() -> Unit)? = null) {
+    private fun renderServiceRow(parent: LinearLayout, item: Map<String, String>, index: Int, openAction: (() -> Unit)? = null, deleteAction: (() -> Unit)? = null) {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -537,6 +548,7 @@ class MainActivity : AppCompatActivity() {
                 setOnClickListener { deleteAction() }
             })
         }
+        if (openAction != null) row.setOnClickListener { openAction() }
         parent.addView(row, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
@@ -593,7 +605,7 @@ class MainActivity : AppCompatActivity() {
                             setTextColor(dark)
                             setPadding(dp(12), dp(12), dp(12), dp(12))
                         })
-                    } else list.forEachIndexed { index, service -> renderServiceRow(items, service, index) }
+                    } else list.forEachIndexed { index, service -> renderServiceRow(items, service, index, openAction = { showCustomerDocuments(service["mr"].orEmpty()) }) }
                 }
             }
         addAction(page, t("logout")) {
@@ -691,7 +703,7 @@ class MainActivity : AppCompatActivity() {
                     })
                 }
                 list.forEachIndexed { index, service ->
-                    renderServiceRow(items, service, index) {
+                    renderServiceRow(items, service, index, deleteAction = {
                         android.app.AlertDialog.Builder(this)
                             .setTitle("सेवा हटवा")
                             .setMessage("‘${serviceLabel(service)}’ ही सेवा हटवायची आहे? ग्राहकांच्या यादीतूनही हटवली जाईल.")
@@ -703,7 +715,8 @@ class MainActivity : AppCompatActivity() {
                                         Toast.makeText(this, firestoreErrorMessage(it), Toast.LENGTH_LONG).show()
                                     }
                             }.show()
-                    }
+                    })
+                    addAction(items, "📄 कागदपत्रे व्यवस्थापन") { showAdminDocuments(service["mr"].orEmpty()) }
                 }
             }
         }
