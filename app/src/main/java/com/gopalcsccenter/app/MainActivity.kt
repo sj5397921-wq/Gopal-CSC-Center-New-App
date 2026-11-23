@@ -20,6 +20,12 @@ class MainActivity : AppCompatActivity() {
     private val blue = Color.rgb(22, 91, 166)
     private val dark = Color.rgb(35, 48, 64)
 
+    private fun firestoreErrorMessage(error: Exception?): String {
+        val code = (error as? com.google.firebase.firestore.FirebaseFirestoreException)?.code?.name ?: "UNKNOWN"
+        val detail = error?.localizedMessage?.takeIf { it.isNotBlank() } ?: "अज्ञात त्रुटी"
+        return "Firestore त्रुटी ($code): $detail"
+    }
+
     private var languageIndex: Int = 0
     private var currentScreen: String = "home"
     private val screenHistory = mutableListOf<String>()
@@ -576,7 +582,7 @@ class MainActivity : AppCompatActivity() {
                 items.removeAllViews()
                 if (error != null) {
                     items.addView(TextView(this).apply {
-                        text = "सेवा यादी मिळवता आली नाही. इंटरनेट तपासा."
+                        text = firestoreErrorMessage(error)
                         setTextColor(Color.RED)
                     })
                 } else {
@@ -653,11 +659,11 @@ class MainActivity : AppCompatActivity() {
                                 Toast.makeText(this, "सेवा जोडली", Toast.LENGTH_SHORT).show()
                             }
                             .addOnFailureListener {
-                                Toast.makeText(this, "सेवा जोडता आली नाही. Firestore Rules तपासा.", Toast.LENGTH_LONG).show()
+                                Toast.makeText(this, firestoreErrorMessage(it), Toast.LENGTH_LONG).show()
                             }
                     }
                 }.addOnFailureListener {
-                    Toast.makeText(this, "डेटाबेसशी संपर्क झाला नाही.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this, firestoreErrorMessage(it), Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -667,13 +673,13 @@ class MainActivity : AppCompatActivity() {
             items.removeAllViews()
             if (error != null) {
                 items.addView(TextView(this).apply {
-                    text = "सेवा लोड करता आली नाही. Firestore Rules तपासा."
+                    text = firestoreErrorMessage(error)
                     setTextColor(Color.RED)
                 })
             } else if (snapshot != null && !snapshot.exists()) {
                 ref.set(mapOf("services" to initialServiceList()))
                     .addOnFailureListener {
-                        Toast.makeText(this, "प्रारंभिक सेवा यादी जतन झाली नाही. Firestore Rules तपासा.", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this, firestoreErrorMessage(it), Toast.LENGTH_LONG).show()
                     }
             } else {
                 val list = decodeServiceList(snapshot?.data)
@@ -694,7 +700,7 @@ class MainActivity : AppCompatActivity() {
                                 val updated = list.toMutableList().apply { removeAt(index) }
                                 ref.set(mapOf("services" to updated))
                                     .addOnFailureListener {
-                                        Toast.makeText(this, "सेवा हटवता आली नाही. Firestore Rules तपासा.", Toast.LENGTH_LONG).show()
+                                        Toast.makeText(this, firestoreErrorMessage(it), Toast.LENGTH_LONG).show()
                                     }
                             }.show()
                     }
