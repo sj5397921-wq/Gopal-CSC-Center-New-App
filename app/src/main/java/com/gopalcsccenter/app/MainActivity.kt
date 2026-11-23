@@ -1108,38 +1108,10 @@ class MainActivity : AppCompatActivity() {
             page, "10 अंकी मोबाईल नंबर",
             InputType.TYPE_CLASS_NUMBER, 10
         )
-        addAction(page, "अर्जाची माहिती जतन करा") {
-            val customerName = customerNameField.text.toString().trim()
-            val customerMobile = customerMobileField.text.toString().trim()
-            if (customerName.isBlank()) {
-                customerNameField.error = "ग्राहकाचे पूर्ण नाव टाका"
-            } else if (!customerMobile.matches(Regex("^[0-9]{10}$"))) {
-                customerMobileField.error = "योग्य 10 अंकी मोबाईल नंबर टाका"
-            } else {
-                currentCustomerName = customerName
-                currentCustomerMobile = customerMobile
-                val user = auth.currentUser
-                if (user == null) {
-                    Toast.makeText(this, "कृपया पुन्हा लॉगिन करा.", Toast.LENGTH_LONG).show()
-                } else {
-                    val applicationRef = db.collection("service_document_uploads").document()
-                    applicationRef.set(mapOf(
-                        "uid" to user.uid,
-                        "recordType" to "customer_application",
-                        "serviceName" to serviceName,
-                        "customerName" to customerName,
-                        "customerMobile" to customerMobile,
-                        "status" to "अर्ज प्राप्त",
-                        "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-                    )).addOnSuccessListener {
-                        currentApplicationId = applicationRef.id
-                        Toast.makeText(this, "अर्जाची माहिती जतन झाली. आता कागदपत्रे अपलोड करा.", Toast.LENGTH_LONG).show()
-                    }.addOnFailureListener {
-                        Toast.makeText(this, firestoreErrorMessage(it), Toast.LENGTH_LONG).show()
-                    }
-                }
-            }
-        }
+        // Allocate an application ID locally; the application itself is saved only at the end.
+        currentApplicationId = db.collection("service_document_uploads").document().id
+        currentCustomerName = ""
+        currentCustomerMobile = ""
 
         // 2. Required documents checklist
         sectionTitle("2. आवश्यक कागदपत्रे यादी")
@@ -1207,10 +1179,18 @@ class MainActivity : AppCompatActivity() {
                         text = "अपलोड करा"
                         isAllCaps = false
                         setOnClickListener {
-                            if (currentApplicationId.isBlank()) {
-                                Toast.makeText(this@MainActivity, "आधी ग्राहकाची माहिती जतन करा.", Toast.LENGTH_LONG).show()
+                            val customerName = customerNameField.text.toString().trim()
+                            val customerMobile = customerMobileField.text.toString().trim()
+                            if (customerName.isBlank()) {
+                                customerNameField.error = "ग्राहकाचे पूर्ण नाव टाका"
                                 return@setOnClickListener
                             }
+                            if (!customerMobile.matches(Regex("^[0-9]{10}$"))) {
+                                customerMobileField.error = "योग्य 10 अंकी मोबाईल नंबर टाका"
+                                return@setOnClickListener
+                            }
+                            currentCustomerName = customerName
+                            currentCustomerMobile = customerMobile
                             pendingDocumentName = name
                             val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                                 addCategory(Intent.CATEGORY_OPENABLE)
@@ -1320,6 +1300,37 @@ class MainActivity : AppCompatActivity() {
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
                     startActivity(Intent.createChooser(shareIntent, "कोटेशन शेअर करा"))
+                }
+            }
+        }
+
+        addAction(page, "माहिती जतन करा") {
+            val customerName = customerNameField.text.toString().trim()
+            val customerMobile = customerMobileField.text.toString().trim()
+            if (customerName.isBlank()) {
+                customerNameField.error = "ग्राहकाचे पूर्ण नाव टाका"
+            } else if (!customerMobile.matches(Regex("^[0-9]{10}$"))) {
+                customerMobileField.error = "योग्य 10 अंकी मोबाईल नंबर टाका"
+            } else {
+                val user = auth.currentUser
+                if (user == null) {
+                    Toast.makeText(this, "कृपया पुन्हा लॉगिन करा.", Toast.LENGTH_LONG).show()
+                } else {
+                    currentCustomerName = customerName
+                    currentCustomerMobile = customerMobile
+                    db.collection("service_document_uploads").document(currentApplicationId).set(mapOf(
+                        "uid" to user.uid,
+                        "recordType" to "customer_application",
+                        "serviceName" to serviceName,
+                        "customerName" to customerName,
+                        "customerMobile" to customerMobile,
+                        "status" to "अर्ज प्राप्त",
+                        "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                    )).addOnSuccessListener {
+                        Toast.makeText(this, "अर्जाची माहिती व कागदपत्रांची नोंद जतन झाली.", Toast.LENGTH_LONG).show()
+                    }.addOnFailureListener {
+                        Toast.makeText(this, firestoreErrorMessage(it), Toast.LENGTH_LONG).show()
+                    }
                 }
             }
         }
