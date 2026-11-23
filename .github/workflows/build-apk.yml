@@ -11,6 +11,7 @@ on:
       - feature/app-logo
       - feature/application-status
       - feature/admin-document-inbox
+      - fix/restore-legacy-document-upload
 
 jobs:
   build:
