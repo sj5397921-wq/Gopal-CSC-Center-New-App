@@ -1,0 +1,14 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /service_uploads/{userId}/{serviceId}/{fileName} {
+      allow read: if request.auth != null
+        && (request.auth.uid == userId
+          || request.auth.token.email == "636657750019@gopalcsccenter.app");
+      allow write: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('application/pdf|image/jpeg|image/png');
+    }
+  }
+}
