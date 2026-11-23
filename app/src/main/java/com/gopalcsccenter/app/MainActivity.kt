@@ -1263,17 +1263,17 @@ class MainActivity : AppCompatActivity() {
             } else if (amount == null) {
                 Toast.makeText(this, "आधी सेवा शुल्क लोड होऊ द्या.", Toast.LENGTH_LONG).show()
             } else {
-                currentCustomerName = customerName
-                currentCustomerMobile = customerMobile
-                createQuotationPdf(serviceName, amount, customerName, customerMobile)?.let { pdfUri ->
-                    val viewIntent = Intent(Intent.ACTION_VIEW).apply {
-                        setDataAndType(pdfUri, "application/pdf")
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    try {
-                        startActivity(Intent.createChooser(viewIntent, "कोटेशन PDF उघडा"))
-                    } catch (_: Exception) {
-                        Toast.makeText(this, "PDF तयार झाला; शेअर पर्याय वापरा.", Toast.LENGTH_LONG).show()
+                saveCustomerApplication(serviceName, customerName, customerMobile) {
+                    createQuotationPdf(serviceName, amount, customerName, customerMobile)?.let { pdfUri ->
+                        val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+                            setDataAndType(pdfUri, "application/pdf")
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        try {
+                            startActivity(Intent.createChooser(viewIntent, "कोटेशन PDF उघडा"))
+                        } catch (_: Exception) {
+                            Toast.makeText(this, "PDF तयार झाला; शेअर पर्याय वापरा.", Toast.LENGTH_LONG).show()
+                        }
                     }
                 }
             }
@@ -1289,47 +1289,16 @@ class MainActivity : AppCompatActivity() {
             } else if (amount == null) {
                 Toast.makeText(this, "आधी सेवा शुल्क लोड होऊ द्या.", Toast.LENGTH_LONG).show()
             } else {
-                currentCustomerName = customerName
-                currentCustomerMobile = customerMobile
-                createQuotationPdf(serviceName, amount, customerName, customerMobile)?.let { pdfUri ->
-                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                        type = "application/pdf"
-                        putExtra(Intent.EXTRA_SUBJECT, "Gopal CSC Center - कोटेशन बिल")
-                        putExtra(Intent.EXTRA_TEXT, "गोपाल CSC सेंटर\nग्राहक: $customerName\nमोबाईल: $customerMobile\nसेवा: $serviceName\nएकूण रक्कम: ₹ $amount")
-                        putExtra(Intent.EXTRA_STREAM, pdfUri)
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    startActivity(Intent.createChooser(shareIntent, "कोटेशन शेअर करा"))
-                }
-            }
-        }
-
-        addAction(page, "माहिती जतन करा") {
-            val customerName = customerNameField.text.toString().trim()
-            val customerMobile = customerMobileField.text.toString().trim()
-            if (customerName.isBlank()) {
-                customerNameField.error = "ग्राहकाचे पूर्ण नाव टाका"
-            } else if (!customerMobile.matches(Regex("^[0-9]{10}$"))) {
-                customerMobileField.error = "योग्य 10 अंकी मोबाईल नंबर टाका"
-            } else {
-                val user = auth.currentUser
-                if (user == null) {
-                    Toast.makeText(this, "कृपया पुन्हा लॉगिन करा.", Toast.LENGTH_LONG).show()
-                } else {
-                    currentCustomerName = customerName
-                    currentCustomerMobile = customerMobile
-                    db.collection("service_document_uploads").document(currentApplicationId).set(mapOf(
-                        "uid" to user.uid,
-                        "recordType" to "customer_application",
-                        "serviceName" to serviceName,
-                        "customerName" to customerName,
-                        "customerMobile" to customerMobile,
-                        "status" to "अर्ज प्राप्त",
-                        "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-                    )).addOnSuccessListener {
-                        Toast.makeText(this, "अर्जाची माहिती व कागदपत्रांची नोंद जतन झाली.", Toast.LENGTH_LONG).show()
-                    }.addOnFailureListener {
-                        Toast.makeText(this, firestoreErrorMessage(it), Toast.LENGTH_LONG).show()
+                saveCustomerApplication(serviceName, customerName, customerMobile) {
+                    createQuotationPdf(serviceName, amount, customerName, customerMobile)?.let { pdfUri ->
+                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "application/pdf"
+                            putExtra(Intent.EXTRA_SUBJECT, "Gopal CSC Center - कोटेशन बिल")
+                            putExtra(Intent.EXTRA_TEXT, "गोपाल CSC सेंटर\\nग्राहक: $customerName\\nमोबाईल: $customerMobile\\nसेवा: $serviceName\\nएकूण रक्कम: ₹ $amount")
+                            putExtra(Intent.EXTRA_STREAM, pdfUri)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        startActivity(Intent.createChooser(shareIntent, "कोटेशन शेअर करा"))
                     }
                 }
             }
@@ -1404,11 +1373,54 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun saveCustomerApplication(serviceName: String, customerName: String, customerMobile: String, onSaved: () -> Unit) {
+        val user = auth.currentUser
+        if (user == null) {
+            Toast.makeText(this, "कृपया पुन्हा लॉगिन करा.", Toast.LENGTH_LONG).show()
+            return
+        }
+        currentCustomerName = customerName
+        currentCustomerMobile = customerMobile
+        if (currentApplicationId.isBlank()) {
+            currentApplicationId = db.collection("service_document_uploads").document().id
+        }
+        db.collection("service_document_uploads").document(currentApplicationId).set(mapOf(
+            "uid" to user.uid,
+            "recordType" to "customer_application",
+            "serviceName" to serviceName,
+            "customerName" to customerName,
+            "customerMobile" to customerMobile,
+            "status" to "अर्ज प्राप्त",
+            "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+        )).addOnSuccessListener {
+            Toast.makeText(this, "अर्जाची माहिती आपोआप जतन झाली.", Toast.LENGTH_SHORT).show()
+            onSaved()
+        }.addOnFailureListener {
+            Toast.makeText(this, firestoreErrorMessage(it), Toast.LENGTH_LONG).show()
+        }
+    }
+
     private fun uploadCustomerDocument(uri: Uri, documentName: String, serviceName: String) {
         val user = auth.currentUser ?: return
-        val mime = contentResolver.getType(uri).orEmpty()
+        val reportedMime = contentResolver.getType(uri).orEmpty().lowercase(Locale.ROOT)
+        val mime = when (reportedMime) {
+            "application/pdf", "image/jpeg", "image/png" -> reportedMime
+            else -> {
+                val name = runCatching {
+                    contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                        if (cursor.moveToFirst()) cursor.getString(0).orEmpty() else ""
+                    }.orEmpty()
+                }.getOrDefault("")
+                when (name.substringAfterLast('.', "").lowercase(Locale.ROOT)) {
+                    "pdf" -> "application/pdf"
+                    "jpg", "jpeg" -> "image/jpeg"
+                    "png" -> "image/png"
+                    else -> ""
+                }
+            }
+        }
         if (mime !in listOf("application/pdf", "image/jpeg", "image/png")) {
-            Toast.makeText(this, "फक्त PDF, JPG किंवा PNG निवडा.", Toast.LENGTH_LONG).show(); return
+            Toast.makeText(this, "फाइलचा प्रकार ओळखता आला नाही. PDF, JPG किंवा PNG निवडा.", Toast.LENGTH_LONG).show(); return
         }
         val size = contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize } ?: -1L
         if (size > 10L * 1024L * 1024L) {
@@ -1435,7 +1447,21 @@ class MainActivity : AppCompatActivity() {
             }.addOnFailureListener {
                 Toast.makeText(this, "फाइल अपलोड झाली; नोंद जतन झाली नाही.", Toast.LENGTH_LONG).show()
             }
-        }.addOnFailureListener { Toast.makeText(this, "अपलोड अयशस्वी: " + it.localizedMessage, Toast.LENGTH_LONG).show() }
+        }.addOnFailureListener { error ->
+            val detail = when (error) {
+                is com.google.firebase.storage.StorageException -> when (error.errorCode) {
+                    com.google.firebase.storage.StorageException.ERROR_BUCKET_NOT_FOUND ->
+                        "Firebase Storage bucket सापडत नाही. Firebase Console मध्ये Storage सुरू करा."
+                    com.google.firebase.storage.StorageException.ERROR_NOT_AUTHENTICATED ->
+                        "लॉगिन कालबाह्य झाले. पुन्हा लॉगिन करा."
+                    com.google.firebase.storage.StorageException.ERROR_NOT_AUTHORIZED ->
+                        "Storage Rules मुळे परवानगी नाकारली. Firebase Storage Rules तपासा."
+                    else -> "Storage त्रुटी code ${error.errorCode}: ${error.localizedMessage}"
+                }
+                else -> error.localizedMessage ?: "अज्ञात त्रुटी"
+            }
+            Toast.makeText(this, "अपलोड अयशस्वी: $detail", Toast.LENGTH_LONG).show()
+        }
     }
 
 }
