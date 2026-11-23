@@ -1395,10 +1395,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun uploadCustomerDocument(uri: Uri, documentName: String, serviceName: String) {
         val user = auth.currentUser ?: return
-        if (currentApplicationId.isBlank()) {
-            Toast.makeText(this, "आधी ग्राहकाची माहिती जतन करा.", Toast.LENGTH_LONG).show()
-            return
-        }
         val mime = contentResolver.getType(uri).orEmpty()
         if (mime !in listOf("application/pdf", "image/jpeg", "image/png")) {
             Toast.makeText(this, "फक्त PDF, JPG किंवा PNG निवडा.", Toast.LENGTH_LONG).show(); return
