@@ -1003,12 +1003,23 @@ class MainActivity : AppCompatActivity() {
             return
         }
         val applicationId = application.id
+        val userId = application.getString("uid").orEmpty()
         val filesQuery = db.collection("service_document_uploads")
-            .whereEqualTo("applicationId", applicationId)
+            .whereEqualTo("uid", userId)
 
         Toast.makeText(this, "कागदपत्रे डिलीट करण्याची प्रक्रिया सुरू झाली...", Toast.LENGTH_SHORT).show()
         filesQuery.get().addOnSuccessListener { result ->
-            val files = result.documents.filter { it.getString("storagePath").orEmpty().isNotBlank() }
+            val serviceName = application.getString("serviceName").orEmpty()
+            val customerName = application.getString("customerName").orEmpty()
+            val customerMobile = application.getString("customerMobile").orEmpty()
+            val files = result.documents.filter { file ->
+                file.getString("storagePath").orEmpty().isNotBlank() &&
+                    (file.getString("applicationId") == applicationId ||
+                        (file.getString("applicationId").isNullOrBlank() &&
+                            file.getString("serviceName") == serviceName &&
+                            file.getString("customerName") == customerName &&
+                            file.getString("customerMobile") == customerMobile))
+            }
             var index = 0
             var deletedCount = 0
             var failedCount = 0
