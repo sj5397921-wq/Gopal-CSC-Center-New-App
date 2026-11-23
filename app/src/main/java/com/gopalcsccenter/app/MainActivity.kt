@@ -730,4 +730,144 @@ class MainActivity : AppCompatActivity() {
         }
         setContentView(ScrollView(this).apply { isFillViewport = true; addView(page) })
     }
+
+    private fun serviceDocumentKey(name: String): String =
+        Base64.encodeToString(name.trim().toByteArray(Charsets.UTF_8), Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+
+    private fun showAdminDocuments(serviceName: String) {
+        if (auth.currentUser?.email != adminEmail) {
+            Toast.makeText(this, "फक्त Admin ही यादी बदलू शकतो.", Toast.LENGTH_LONG).show()
+            return
+        }
+        activeServiceName = serviceName
+        recordScreen("admin_documents")
+        val page = basePage()
+        addHeading(page, "कागदपत्रे व्यवस्थापन", serviceName)
+        val field = addField(page, "कागदपत्राचे नाव टाका")
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        page.addView(list)
+        fun refresh() {
+            list.removeAllViews()
+            db.collection("service_documents").document(serviceDocumentKey(serviceName)).get()
+                .addOnSuccessListener { snap ->
+                    val docs = (snap.get("documents") as? List<*>)?.mapNotNull { it?.toString() }?.toMutableList() ?: mutableListOf()
+                    docs.forEachIndexed { i, name ->
+                        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+                        row.addView(TextView(this).apply { text = name; setTextColor(Color.WHITE) },
+                            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                        row.addView(Button(this).apply {
+                            text = "बदला"; isAllCaps = false
+                            setOnClickListener {
+                                val edit = EditText(this@MainActivity).apply { setText(name) }
+                                android.app.AlertDialog.Builder(this@MainActivity).setTitle("कागदपत्र बदला").setView(edit)
+                                    .setNegativeButton("रद्द", null).setPositiveButton("जतन") { _, _ ->
+                                        val v = edit.text.toString().trim()
+                                        if (v.isNotBlank()) { docs[i] = v; saveServiceDocuments(serviceName, docs, ::refresh) }
+                                    }.show()
+                            }
+                        })
+                        row.addView(Button(this).apply {
+                            text = "हटवा"; isAllCaps = false
+                            setOnClickListener {
+                                docs.removeAt(i); saveServiceDocuments(serviceName, docs, ::refresh)
+                            }
+                        })
+                        list.addView(row)
+                    }
+                    if (docs.isEmpty()) list.addView(TextView(this).apply { text = "कागदपत्रे जोडलेली नाहीत."; setTextColor(Color.WHITE) })
+                }.addOnFailureListener { Toast.makeText(this, firestoreErrorMessage(it), Toast.LENGTH_LONG).show() }
+        }
+        addAction(page, "＋ कागदपत्र जोडा") {
+            val name = field.text.toString().trim()
+            if (name.isBlank()) field.error = "नाव टाका"
+            else db.collection("service_documents").document(serviceDocumentKey(serviceName)).get()
+                .addOnSuccessListener { snap ->
+                    val docs = (snap.get("documents") as? List<*>)?.mapNotNull { it?.toString() }?.toMutableList() ?: mutableListOf()
+                    if (docs.any { it.equals(name, true) }) field.error = "हे आधीपासून आहे"
+                    else { docs.add(name); saveServiceDocuments(serviceName, docs) { field.text.clear(); refresh() } }
+                }.addOnFailureListener { Toast.makeText(this, firestoreErrorMessage(it), Toast.LENGTH_LONG).show() }
+        }
+        addAction(page, "मागे जा") { showAdminWelcome() }
+        refresh()
+        setContentView(ScrollView(this).apply { isFillViewport = true; addView(page) })
+    }
+
+    private fun saveServiceDocuments(serviceName: String, docs: List<String>, done: () -> Unit) {
+        db.collection("service_documents").document(serviceDocumentKey(serviceName))
+            .set(mapOf("serviceName" to serviceName, "documents" to docs))
+            .addOnSuccessListener { Toast.makeText(this, "कागदपत्र यादी जतन झाली.", Toast.LENGTH_SHORT).show(); done() }
+            .addOnFailureListener { Toast.makeText(this, firestoreErrorMessage(it), Toast.LENGTH_LONG).show() }
+    }
+
+    private fun showCustomerDocuments(serviceName: String) {
+        activeServiceName = serviceName
+        recordScreen("customer_documents")
+        val page = basePage()
+        addHeading(page, serviceName, "आवश्यक कागदपत्रे")
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        page.addView(list)
+        db.collection("service_documents").document(serviceDocumentKey(serviceName)).get()
+            .addOnSuccessListener { snap ->
+                val docs = (snap.get("documents") as? List<*>)?.mapNotNull { it?.toString() }.orEmpty()
+                if (docs.isEmpty()) list.addView(TextView(this).apply {
+                    text = "Admin ने अद्याप कागदपत्रांची यादी दिलेली नाही."; setTextColor(Color.WHITE)
+                })
+                docs.forEach { name ->
+                    val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(10), dp(12), dp(10)); background = android.graphics.drawable.GradientDrawable().apply { setColor(Color.WHITE); cornerRadius = dp(12).toFloat() } }
+                    card.addView(TextView(this).apply { text = "📄 $name"; textSize = 16f; setTextColor(dark) })
+                    addAction(card, "कागदपत्र अपलोड करा") {
+                        pendingDocumentName = name
+                        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                            addCategory(Intent.CATEGORY_OPENABLE); type = "*/*"
+                            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/pdf", "image/jpeg", "image/png"))
+                        }
+                        startActivityForResult(intent, filePickerRequestCode)
+                    }
+                    list.addView(card)
+                }
+            }.addOnFailureListener { Toast.makeText(this, firestoreErrorMessage(it), Toast.LENGTH_LONG).show() }
+        addAction(page, "मागे जा") { showCustomerWelcome() }
+        setContentView(ScrollView(this).apply { isFillViewport = true; addView(page) })
+    }
+
+    @Deprecated("Deprecated in Android")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == filePickerRequestCode && resultCode == RESULT_OK) {
+            val uri = data?.data ?: return
+            uploadCustomerDocument(uri, pendingDocumentName, activeServiceName)
+        }
+    }
+
+    private fun uploadCustomerDocument(uri: Uri, documentName: String, serviceName: String) {
+        val user = auth.currentUser ?: return
+        val mime = contentResolver.getType(uri).orEmpty()
+        if (mime !in listOf("application/pdf", "image/jpeg", "image/png")) {
+            Toast.makeText(this, "फक्त PDF, JPG किंवा PNG निवडा.", Toast.LENGTH_LONG).show(); return
+        }
+        val size = contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize } ?: -1L
+        if (size > 10L * 1024L * 1024L) {
+            Toast.makeText(this, "फाइल 10 MB पेक्षा कमी असावी.", Toast.LENGTH_LONG).show(); return
+        }
+        val extension = when (mime) { "application/pdf" -> "pdf"; "image/png" -> "png"; else -> "jpg" }
+        val fileName = "doc_" + System.currentTimeMillis() + "." + extension
+        val objectPath = "service_uploads/" + user.uid + "/" + serviceDocumentKey(serviceName) + "/" + fileName
+        val ref = storage.reference.child(objectPath)
+        Toast.makeText(this, "अपलोड सुरू आहे...", Toast.LENGTH_SHORT).show()
+        ref.putFile(uri).continueWithTask { task ->
+            if (!task.isSuccessful) throw (task.exception ?: Exception("Upload failed"))
+            ref.downloadUrl
+        }.addOnSuccessListener { download ->
+            db.collection("service_document_uploads").add(mapOf(
+                "uid" to user.uid, "serviceName" to serviceName, "documentName" to documentName,
+                "storagePath" to objectPath, "downloadUrl" to download.toString(), "contentType" to mime,
+                "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+            )).addOnSuccessListener {
+                Toast.makeText(this, "कागदपत्र अपलोड झाले.", Toast.LENGTH_LONG).show()
+            }.addOnFailureListener {
+                Toast.makeText(this, "फाइल अपलोड झाली; नोंद जतन झाली नाही.", Toast.LENGTH_LONG).show()
+            }
+        }.addOnFailureListener { Toast.makeText(this, "अपलोड अयशस्वी: " + it.localizedMessage, Toast.LENGTH_LONG).show() }
+    }
+
 }
