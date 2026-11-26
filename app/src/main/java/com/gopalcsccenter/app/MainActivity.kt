@@ -1173,7 +1173,7 @@ class MainActivity : AppCompatActivity() {
         val fileName = "doc_" + System.currentTimeMillis() + "." + extension
         Toast.makeText(this, "Google Drive वर अपलोड सुरू आहे...", Toast.LENGTH_SHORT).show()
 
-        user.getIdToken(false)
+        user.getIdToken(true)
             .addOnSuccessListener { tokenResult ->
                 Thread {
                     try {
