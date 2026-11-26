@@ -8,6 +8,7 @@ on:
       - fresh-customer-admin-start
       - version-1.97-add-11-services
       - feature/document-checklist
+      - feature/google-drive-upload
 
 jobs:
   build:
