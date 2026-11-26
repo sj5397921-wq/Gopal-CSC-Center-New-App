@@ -11,7 +11,9 @@ import java.util.Locale
 import android.graphics.pdf.PdfDocument
 import androidx.core.content.FileProvider
 import android.util.Base64
-import com.google.firebase.storage.FirebaseStorage
+import java.net.HttpURLConnection
+import java.net.URL
+import org.json.JSONObject
 import android.text.InputFilter
 import android.text.InputType
 import android.graphics.Color
@@ -32,7 +34,7 @@ class MainActivity : AppCompatActivity() {
     private var pendingDocumentName: String = ""
     private var currentCustomerName: String = ""
     private var currentCustomerMobile: String = ""
-    private val storage by lazy { FirebaseStorage.getInstance() }
+    private val driveBackendUrl = "https://script.google.com/macros/s/AKfycbxPSnJJHFWAiNbjACyTWHE5PEWMwOFTunKWzy-LJi8hroHt3prfArMMiyK10bD7rlqdAg/exec"
     private val adminEmail = "636657750019@gopalcsccenter.app"
     private val filePickerRequestCode = 741
     private val blue = Color.rgb(22, 91, 166)
@@ -1148,35 +1150,105 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun uploadCustomerDocument(uri: Uri, documentName: String, serviceName: String) {
-        val user = auth.currentUser ?: return
+        val user = auth.currentUser ?: run {
+            Toast.makeText(this, "कृपया पुन्हा लॉगिन करा.", Toast.LENGTH_LONG).show()
+            return
+        }
         val mime = contentResolver.getType(uri).orEmpty()
         if (mime !in listOf("application/pdf", "image/jpeg", "image/png")) {
-            Toast.makeText(this, "फक्त PDF, JPG किंवा PNG निवडा.", Toast.LENGTH_LONG).show(); return
+            Toast.makeText(this, "फक्त PDF, JPG किंवा PNG निवडा.", Toast.LENGTH_LONG).show()
+            return
         }
         val size = contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize } ?: -1L
-        if (size > 10L * 1024L * 1024L) {
-            Toast.makeText(this, "फाइल 10 MB पेक्षा कमी असावी.", Toast.LENGTH_LONG).show(); return
+        if (size < 0L || size > 10L * 1024L * 1024L) {
+            Toast.makeText(this, "फाइल 10 MB पेक्षा कमी असावी.", Toast.LENGTH_LONG).show()
+            return
         }
-        val extension = when (mime) { "application/pdf" -> "pdf"; "image/png" -> "png"; else -> "jpg" }
+
+        val extension = when (mime) {
+            "application/pdf" -> "pdf"
+            "image/png" -> "png"
+            else -> "jpg"
+        }
         val fileName = "doc_" + System.currentTimeMillis() + "." + extension
-        val objectPath = "service_uploads/" + user.uid + "/" + serviceDocumentKey(serviceName) + "/" + fileName
-        val ref = storage.reference.child(objectPath)
-        Toast.makeText(this, "अपलोड सुरू आहे...", Toast.LENGTH_SHORT).show()
-        ref.putFile(uri).continueWithTask { task ->
-            if (!task.isSuccessful) throw (task.exception ?: Exception("Upload failed"))
-            ref.downloadUrl
-        }.addOnSuccessListener { download ->
-            db.collection("service_document_uploads").add(mapOf(
-                "uid" to user.uid, "serviceName" to serviceName, "documentName" to documentName,
-                "customerName" to currentCustomerName, "customerMobile" to currentCustomerMobile,
-                "storagePath" to objectPath, "downloadUrl" to download.toString(), "contentType" to mime,
-                "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-            )).addOnSuccessListener {
-                Toast.makeText(this, "कागदपत्र अपलोड झाले.", Toast.LENGTH_LONG).show()
-            }.addOnFailureListener {
-                Toast.makeText(this, "फाइल अपलोड झाली; नोंद जतन झाली नाही.", Toast.LENGTH_LONG).show()
+        Toast.makeText(this, "Google Drive वर अपलोड सुरू आहे...", Toast.LENGTH_SHORT).show()
+
+        user.getIdToken(false)
+            .addOnSuccessListener { tokenResult ->
+                Thread {
+                    try {
+                        val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                            ?: throw Exception("निवडलेली फाइल वाचता आली नाही.")
+                        if (bytes.size > 10 * 1024 * 1024) {
+                            throw Exception("फाइल 10 MB पेक्षा मोठी आहे.")
+                        }
+
+                        val payload = JSONObject()
+                            .put("action", "upload")
+                            .put("idToken", tokenResult.token ?: "")
+                            .put("fileName", fileName)
+                            .put("mimeType", mime)
+                            .put("fileBase64", Base64.encodeToString(bytes, Base64.NO_WRAP))
+                            .put("serviceName", serviceName)
+                            .put("documentName", documentName)
+
+                        val connection = (URL(driveBackendUrl).openConnection() as HttpURLConnection).apply {
+                            requestMethod = "POST"
+                            doOutput = true
+                            connectTimeout = 30000
+                            readTimeout = 90000
+                            instanceFollowRedirects = true
+                            setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                        }
+
+                        val responseText: String
+                        try {
+                            connection.outputStream.use {
+                                it.write(payload.toString().toByteArray(Charsets.UTF_8))
+                            }
+                            val responseCode = connection.responseCode
+                            val stream = if (responseCode in 200..299) connection.inputStream else connection.errorStream
+                            responseText = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
+                                ?: throw Exception("Backend कडून उत्तर मिळाले नाही. HTTP $responseCode")
+                        } finally {
+                            connection.disconnect()
+                        }
+
+                        val result = JSONObject(responseText)
+                        if (!result.optBoolean("success")) {
+                            throw Exception(result.optString("error", "अपलोड अयशस्वी"))
+                        }
+                        val fileId = result.optString("fileId")
+                        if (fileId.isBlank()) throw Exception("Drive file ID मिळाला नाही.")
+
+                        runOnUiThread {
+                            db.collection("service_document_uploads").add(mapOf(
+                                "uid" to user.uid,
+                                "recordType" to "customer_document",
+                                "serviceName" to serviceName,
+                                "documentName" to documentName,
+                                "customerName" to currentCustomerName,
+                                "customerMobile" to currentCustomerMobile,
+                                "driveFileId" to fileId,
+                                "driveFileName" to fileName,
+                                "contentType" to mime,
+                                "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                            )).addOnSuccessListener {
+                                Toast.makeText(this, "कागदपत्र Google Drive वर अपलोड झाले.", Toast.LENGTH_LONG).show()
+                            }.addOnFailureListener {
+                                Toast.makeText(this, "फाइल Drive वर अपलोड झाली; अर्ज नोंद जतन झाली नाही. Admin ला कळवा.", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    } catch (error: Exception) {
+                        runOnUiThread {
+                            Toast.makeText(this, "अपलोड अयशस्वी: ${error.localizedMessage ?: "त्रुटी"}", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }.start()
             }
-        }.addOnFailureListener { Toast.makeText(this, "अपलोड अयशस्वी: " + it.localizedMessage, Toast.LENGTH_LONG).show() }
+            .addOnFailureListener {
+                Toast.makeText(this, "लॉगिन टोकन मिळाले नाही: ${it.localizedMessage}", Toast.LENGTH_LONG).show()
+            }
     }
 
 }
