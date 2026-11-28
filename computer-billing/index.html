@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="mr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gopal CSC Billing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{font-family:"Noto Sans Devanagari",Arial,sans-serif;color:#172033;background:#f3f6fb}*{box-sizing:border-box}body{margin:0}.wrap{max-width:1100px;margin:auto;padding:18px}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.brand{font-size:22px;font-weight:700;color:#164b8e}.panel{background:white;border:1px solid #e2e8f0;border-radius:14px;padding:18px;margin:14px 0;box-shadow:0 4px 18px #18365c0b}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}label{display:block;font-size:13px;color:#526174;margin-bottom:5px}input,select{width:100%;padding:11px;border:1px solid #cbd5e1;border-radius:8px;font:inherit;background:white}button{border:0;border-radius:9px;padding:11px 16px;background:#1659a7;color:white;font:inherit;font-weight:600;cursor:pointer}button.secondary{background:#e8eef7;color:#173a65}button.danger{background:#9f2f2f}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.muted{color:#64748b;font-size:13px}.billrow{display:flex;gap:10px;align-items:flex-start;border-top:1px solid #e8edf4;padding:12px 0}.billrow .details{flex:1}.hidden{display:none!important}.error{color:#b42318}.success{color:#167044}.receipt{border:1px solid #cbd5e1;padding:12px;break-inside:avoid;background:white}.receipt h3{margin:0;text-align:center;color:#164b8e}.receipt .center{text-align:center}.receipt .line{border-top:1px dashed #94a3b8;margin:8px 0}.receipt p{margin:5px 0;font-size:12px}.receipt .amount{font-weight:700;font-size:15px}.print-grid{display:grid;grid-template-columns:1fr 1fr;gap:8mm}.print-page{break-after:page;page-break-after:always}.print-page:last-child{break-after:auto;page-break-after:auto}
+@media(max-width:650px){.grid{grid-template-columns:1fr}.wrap{padding:10px}}
+@media print{@page{size:A4;margin:9mm}.no-print{display:none!important}body{background:white}.print-root{display:block!important}.print-page{height:277mm;overflow:hidden}.print-grid{height:100%;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:6mm}.receipt{height:100%;padding:7mm;border:1px solid #888}.receipt p{font-size:10pt}.receipt h3{font-size:15pt}}
+</style></head>
+<body>
+<div class="wrap no-print">
+ <div class="top"><div><div class="brand">GOPAL CSC CENTER</div><div class="muted">Billing Software • Computer Edition</div></div><div id="account" class="muted">लॉगिन केलेले नाही</div></div>
+ <section id="loginPanel" class="panel">
+  <h2>Admin Login</h2><div class="grid">
+   <div><label>Email / Admin ID Email</label><input id="email" type="email" autocomplete="username" value="636657750019@gopalcsccenter.app"></div>
+   <div><label>Password</label><input id="password" type="password" autocomplete="current-password"></div>
+  </div><div class="actions"><button id="loginBtn">Login</button></div><p id="loginMsg" class="muted">Android अॅपमधील त्याच Admin Firebase खात्याने लॉगिन करा.</p>
+ </section>
+ <div id="appPanel" class="hidden">
+  <section class="panel">
+   <h2>नवीन बिल तयार करा / Create Bill</h2>
+   <div class="grid">
+    <div><label>ग्राहकाचे नाव / Customer Name</label><input id="customer" maxlength="100"></div>
+    <div><label>मोबाईल / Mobile</label><input id="mobile" inputmode="numeric" maxlength="10"></div>
+    <div><label>सेवा / Service</label><select id="service"><option>आधार कार्ड सेवा</option><option>पॅन कार्ड सेवा</option><option>MahaDBT अर्ज</option><option>जात प्रमाणपत्र</option><option>उत्पन्न प्रमाणपत्र</option><option>रहिवासी प्रमाणपत्र</option><option>रेल्वे तिकीट बुकिंग</option><option>बस तिकीट बुकिंग</option><option>विमान तिकीट बुकिंग</option><option>ऑनलाइन फॉर्म</option><option>प्रिंट आणि झेरॉक्स</option><option>इतर सेवा</option></select></div>
+    <div><label>रक्कम / Amount (₹)</label><input id="amount" type="number" min="0" step="0.01"></div>
+    <div><label>संदर्भ क्रमांक / Reference (optional)</label><input id="reference"></div>
+    <div><label>पेमेंट स्थिती / Payment Status</label><select id="payment"><option>बाकी</option><option>रोख भरले</option><option>UPI भरले</option></select></div>
+   </div>
+   <div class="actions"><button id="createBtn">बिल सेव्ह करा / Save Bill</button><span id="createMsg" class="muted"></span></div>
+  </section>
+  <section class="panel">
+   <div class="top"><div><h2>बिल इतिहास / Bill History</h2><div id="syncStatus" class="muted">Live Sync सुरू होत आहे...</div></div><button id="logoutBtn" class="secondary">Logout</button></div>
+   <div class="actions"><button id="printBtn">निवडलेली बिले Print (A4 वर 4)</button><button id="selectBtn" class="secondary">सर्व निवडा</button></div>
+   <div id="billList"></div>
+  </section>
+ </div>
+</div>
+<div id="printRoot" class="print-root hidden"></div>
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {getFirestore,collection,doc,setDoc,onSnapshot,query,orderBy} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+const firebaseConfig={apiKey:"AIzaSyA5BwnDZfHQ0XaVdcxWpMRGBVYmaHehRpY",authDomain:"gopal-136d3.firebaseapp.com",projectId:"gopal-136d3",storageBucket:"gopal-136d3.firebasestorage.app"};
+const ADMIN="636657750019@gopalcsccenter.app";
+const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
+const $=id=>document.getElementById(id);let bills=[],unsubscribe=null;
+const money=n=>"₹"+Number(n||0).toFixed(2);
+function msg(id,text,cls="muted"){$(id).textContent=text;$(id).className=cls}
+$("loginBtn").onclick=async()=>{msg("loginMsg","लॉगिन करत आहोत...");try{await signInWithEmailAndPassword(auth,$("email").value.trim(),$("password").value)}catch(e){msg("loginMsg","Login अयशस्वी: "+e.message,"error")}};
+$("logoutBtn").onclick=()=>signOut(auth);
+onAuthStateChanged(auth,user=>{
+ if(unsubscribe){unsubscribe();unsubscribe=null}
+ const ok=!!user&&user.email===ADMIN;
+ $("loginPanel").classList.toggle("hidden",ok);$("appPanel").classList.toggle("hidden",!ok);
+ $("account").textContent=ok?("Admin: "+user.email):"लॉगिन केलेले नाही";
+ if(user&&!ok){signOut(auth);msg("loginMsg","या खात्याला Admin परवानगी नाही.","error")}
+ if(ok){const q=query(collection(db,"billingRecords"),orderBy("createdAt","desc"));unsubscribe=onSnapshot(q,s=>{bills=s.docs.map(d=>d.data());renderBills();msg("syncStatus","Live Sync सुरू • "+bills.length+" बिले","success")},e=>msg("syncStatus","Cloud त्रुटी: "+e.message,"error"))}
+});
+$("createBtn").onclick=async()=>{
+ const name=$("customer").value.trim(),mobile=$("mobile").value.trim(),amount=Number($("amount").value);
+ if(!name){msg("createMsg","ग्राहकाचे नाव भरा.","error");return}
+ if(!/^[0-9]{10}$/.test(mobile)){msg("createMsg","10 अंकी मोबाईल नंबर भरा.","error");return}
+ if(!Number.isFinite(amount)||amount<0){msg("createMsg","योग्य रक्कम भरा.","error");return}
+ const billNumber="GCSC"+String(Date.now()).slice(-10);
+ const date=new Date(),status=$("payment").value;
+ const data={billNumber,applicationNo:"GAPP"+billNumber.slice(-8),applicationStatus:"अर्ज प्राप्त",date:date.toLocaleString("en-IN"),createdAt:date.getTime(),customerName:name,phone:mobile,service:$("service").value,amount,reference:$("reference").value.trim(),paymentStatus:status,receipt:"",createdBy:auth.currentUser.uid};
+ $("createBtn").disabled=true;
+ try{await setDoc(doc(db,"billingRecords",billNumber),data);msg("createMsg","बिल सेव्ह झाले: "+billNumber,"success");$("customer").value="";$("mobile").value="";$("amount").value="";$("reference").value=""}
+ catch(e){msg("createMsg","सेव्ह अयशस्वी: "+e.message,"error")}finally{$("createBtn").disabled=false}
+};
+function renderBills(){
+ const root=$("billList");root.replaceChildren();
+ if(!bills.length){root.textContent="अजून बिले उपलब्ध नाहीत.";return}
+ for(const b of bills){const row=document.createElement("div");row.className="billrow";
+ const check=document.createElement("input");check.type="checkbox";check.dataset.bill=b.billNumber;check.style.width="20px";
+ const details=document.createElement("div");details.className="details";
+ const strong=document.createElement("strong");strong.textContent=(b.billNumber||"")+" • "+money(b.amount);
+ const p=document.createElement("p");p.className="muted";p.textContent=[b.customerName,b.phone,b.service,b.date,b.paymentStatus].filter(Boolean).join(" • ");
+ details.append(strong,p);row.append(check,details);root.append(row)}
+}
+$("selectBtn").onclick=()=>{const boxes=[...$("billList").querySelectorAll("input[type=checkbox]")];const all=boxes.every(x=>x.checked);boxes.forEach(x=>x.checked=!all);$("selectBtn").textContent=all?"सर्व निवडा":"निवड काढा"};
+$("printBtn").onclick=()=>{
+ const ids=[...$("billList").querySelectorAll("input:checked")].map(x=>x.dataset.bill);
+ const chosen=bills.filter(b=>ids.includes(b.billNumber));
+ if(!chosen.length){alert("प्रिंटसाठी बिले निवडा.");return}
+ const root=$("printRoot");root.replaceChildren();root.classList.remove("hidden");
+ for(let i=0;i<chosen.length;i+=4){const page=document.createElement("div");page.className="print-page";const grid=document.createElement("div");grid.className="print-grid";
+ chosen.slice(i,i+4).forEach(b=>grid.append(makeReceipt(b)));
+ page.append(grid);root.append(page)}
+ window.print();setTimeout(()=>root.classList.add("hidden"),1000)
+};
+function makeReceipt(b){
+ const el=document.createElement("article");el.className="receipt";
+ const add=(tag,text,cls)=>{const n=document.createElement(tag);n.textContent=text;if(cls)n.className=cls;el.append(n)};
+ add("h3","GOPAL CSC CENTER");add("p","बिल पावती / BILL RECEIPT","center");
+ el.append(Object.assign(document.createElement("div"),{className:"line"}));
+ add("p","बिल क्रमांक / Bill No: "+(b.billNumber||""));
+ add("p","दिनांक / Date: "+(b.date||""));
+ add("p","ग्राहक / Customer: "+(b.customerName||""));
+ add("p","मोबाईल / Mobile: "+(b.phone||""));
+ add("p","सेवा / Service: "+(b.service||""));
+ if(b.reference)add("p","संदर्भ / Reference: "+b.reference);
+ add("p","पेमेंट / Payment: "+(b.paymentStatus||""));
+ el.append(Object.assign(document.createElement("div"),{className:"line"}));
+ add("p","एकूण रक्कम / Total Amount: "+money(b.amount),"amount");
+ add("p","संचालक: Suresh Jadhav • 7875277904","center");
+ add("p","धन्यवाद! • Thank you!","center");return el
+}
+</script></body></html>
