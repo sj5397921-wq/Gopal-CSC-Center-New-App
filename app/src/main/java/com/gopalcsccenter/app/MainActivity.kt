@@ -63,9 +63,56 @@ class MainActivity : AppCompatActivity() {
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(24, 30, 24, 24)
-            setBackgroundColor(Color.WHITE)
+            setPadding(20, 24, 20, 24)
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(Color.rgb(238, 250, 244), Color.rgb(239, 247, 255))
+            )
         }
+    }
+
+    private fun addBrandHeader(parent: LinearLayout) {
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(16, 16, 16, 16)
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT,
+                intArrayOf(Color.rgb(0, 130, 76), Color.rgb(0, 83, 160))
+            ).apply { cornerRadius = 24f }
+        }
+        val mark = TextView(this).apply {
+            text = "G"
+            textSize = 34f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            background = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.OVAL
+                setColor(Color.rgb(255, 255, 255))
+                setStroke(4, Color.rgb(255, 190, 30))
+            }
+        }
+        header.addView(mark, LinearLayout.LayoutParams(58, 58))
+        val brandText = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(14, 0, 0, 0)
+        }
+        brandText.addView(TextView(this).apply {
+            text = "Gopal CSC Center"
+            textSize = 22f
+            setTextColor(Color.WHITE)
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+        })
+        brandText.addView(TextView(this).apply {
+            text = "Digital India • Digital Seva"
+            textSize = 13f
+            setTextColor(Color.WHITE)
+        })
+        header.addView(brandText, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        parent.addView(header, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            bottomMargin = 18
+        })
     }
 
     private fun addButton(parent: LinearLayout, text: String, action: () -> Unit) {
@@ -73,6 +120,8 @@ class MainActivity : AppCompatActivity() {
             this.text = text
             textSize = 16f
             isAllCaps = false
+            setTextColor(Color.WHITE)
+            backgroundTintList = android.content.res.ColorStateList.valueOf(Color.rgb(0, 125, 83))
             setOnClickListener { action() }
         }
         parent.addView(
@@ -115,7 +164,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun showHome() {
         layout = createLayout()
-        addTitle(layout, "GOPAL CSC CENTER")
+        addBrandHeader(layout)
         val subtitle = TextView(this).apply {
             text = "आपल्या सर्व डिजिटल सेवा एकाच ठिकाणी"
             textSize = 17f
