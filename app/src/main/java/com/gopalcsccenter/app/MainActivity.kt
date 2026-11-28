@@ -566,7 +566,8 @@ class MainActivity : AppCompatActivity() {
             "reference" to reference,
             "paymentStatus" to paymentStatus,
             "receipt" to receipt,
-            "documents" to documents.toString()
+            "documents" to documents.toString(),
+            "createdBy" to (firebaseAuth.currentUser?.uid ?: "")
         )
         BillingRepository.saveBill(cloudBill) { success, error ->
             runOnUiThread {
