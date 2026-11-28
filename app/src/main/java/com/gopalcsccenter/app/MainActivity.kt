@@ -2317,6 +2317,7 @@ class MainActivity : AppCompatActivity() {
 
         addButton(page, "अर्ज व्यवस्थापन / स्थिती बदला") { showApplicationTracking() }
         addButton(page, "Cloud बिल रेकॉर्ड / Live Sync") { showCloudBillingRecords() }
+        addButton(page, "नवीन बिल तयार करा") { showAdminCreateBill() }
         addButton(page, "सेवा शुल्क व्यवस्थापन") { showAdminFeePanel() }
         addButton(page, "Dashboard पुन्हा अपडेट करा") { showAdminDashboard() }
         addButton(page, "Logout") {
@@ -2325,6 +2326,66 @@ class MainActivity : AppCompatActivity() {
             showHome()
         }
         addButton(page, "मुख्य पानावर जा") { showHome() }
+        setContentView(ScrollView(this).apply {
+            isFillViewport = true
+            addView(page, android.view.ViewGroup.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+            ))
+        })
+    }
+
+    private fun showAdminCreateBill() {
+        if (firebaseAuth.currentUser?.email != authorizedAdminEmail) {
+            showMessage("फक्त Admin बिल तयार करू शकतो.")
+            showHome()
+            return
+        }
+        val page = createLayout()
+        addTitle(page, "नवीन बिल / Create Bill")
+        val name = addField(page, "ग्राहकाचे नाव / Customer name")
+        val mobile = addField(page, "मोबाईल नंबर / Mobile", InputType.TYPE_CLASS_PHONE)
+        val service = Spinner(this).apply {
+            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, services)
+        }
+        page.addView(TextView(this).apply {
+            text = "सेवा निवडा / Select service"
+            textSize = 15f
+            setTextColor(Color.DKGRAY)
+        })
+        page.addView(service)
+        val amount = addField(page, "रक्कम / Amount (₹)", InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL)
+        val reference = addField(page, "संदर्भ क्रमांक (ऐच्छिक)")
+        val payment = Spinner(this).apply {
+            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item,
+                listOf("बाकी", "रोख भरले", "UPI भरले"))
+        }
+        page.addView(TextView(this).apply {
+            text = "पेमेंट स्थिती / Payment status"
+            textSize = 15f
+            setTextColor(Color.DKGRAY)
+        })
+        page.addView(payment)
+        addButton(page, "बिल तयार करा / Create Bill") {
+            val customer = name.text.toString().trim()
+            val phone = mobile.text.toString().trim()
+            val fee = amount.text.toString().trim().toDoubleOrNull()
+            if (customer.isBlank()) {
+                name.error = "ग्राहकाचे नाव भरा"
+                return@addButton
+            }
+            if (!phone.matches(Regex("[0-9]{10}"))) {
+                mobile.error = "10 अंकी मोबाईल नंबर भरा"
+                return@addButton
+            }
+            if (fee == null || fee < 0) {
+                amount.error = "योग्य रक्कम भरा"
+                return@addButton
+            }
+            showBill(service.selectedItem.toString(), customer, phone, fee,
+                reference.text.toString().trim(), payment.selectedItem.toString(), emptyList())
+        }
+        addButton(page, "Admin Dashboard") { showAdminDashboard() }
         setContentView(ScrollView(this).apply {
             isFillViewport = true
             addView(page, android.view.ViewGroup.LayoutParams(
