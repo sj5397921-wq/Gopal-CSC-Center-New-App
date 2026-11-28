@@ -1,0 +1,27 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isGopalAdmin() {
+      return request.auth != null
+        && request.auth.token.email == "636657750019@gopalcsccenter.app";
+    }
+
+    match /billingRecords/{billId} {
+      allow read: if isGopalAdmin();
+      allow create: if isGopalAdmin()
+        && request.resource.data.billNumber == billId
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.amount is number
+        && request.resource.data.amount >= 0;
+      allow update: if isGopalAdmin()
+        && request.resource.data.billNumber == billId
+        && request.resource.data.createdBy == resource.data.createdBy;
+      allow delete: if isGopalAdmin();
+    }
+
+    // Deny all other Firestore access unless separately authorized rules are added.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
