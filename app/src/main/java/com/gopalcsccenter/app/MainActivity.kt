@@ -549,6 +549,34 @@ class MainActivity : AppCompatActivity() {
         record.put("documents", documents)
         records.put(record)
         prefs.edit().putString("bills", records.toString()).apply()
+
+        // Keep the existing local record and also save a cloud copy for cross-device billing.
+        val cloudBill = hashMapOf<String, Any>(
+            "billNumber" to billNumber,
+            "applicationNo" to ("GAPP" + billNumber.takeLast(8)),
+            "applicationStatus" to "अर्ज प्राप्त",
+            "date" to date,
+            "createdAt" to System.currentTimeMillis(),
+            "customerName" to customerName,
+            "phone" to phone,
+            "service" to service,
+            "amount" to amount,
+            "reference" to reference,
+            "paymentStatus" to paymentStatus,
+            "receipt" to receipt,
+            "documents" to documents.toString()
+        )
+        BillingRepository.saveBill(cloudBill) { success, error ->
+            runOnUiThread {
+                if (!success) {
+                    Toast.makeText(
+                        this,
+                        "बिल मोबाईलमध्ये सेव्ह झाले; Cloud Sync अयशस्वी: ${error ?: "त्रुटी"}",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+        }
     }
 
     private fun loadBillRecords(): JSONArray {
