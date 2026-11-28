@@ -26,6 +26,7 @@ import com.google.firebase.auth.PhoneAuthCredential
 import com.google.firebase.auth.PhoneAuthProvider
 import com.google.firebase.auth.PhoneAuthOptions
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.FirebaseException
 
 class MainActivity : AppCompatActivity() {
@@ -52,6 +53,7 @@ class MainActivity : AppCompatActivity() {
     private val chooseApplicationDocumentsRequest = 704
     private val firebaseAuth: FirebaseAuth by lazy { FirebaseAuth.getInstance() }
     private var adminVerificationId: String? = null
+    private var cloudBillsListener: ListenerRegistration? = null
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         showHome()
@@ -2314,6 +2316,7 @@ class MainActivity : AppCompatActivity() {
         )
 
         addButton(page, "अर्ज व्यवस्थापन / स्थिती बदला") { showApplicationTracking() }
+        addButton(page, "Cloud बिल रेकॉर्ड / Live Sync") { showCloudBillingRecords() }
         addButton(page, "सेवा शुल्क व्यवस्थापन") { showAdminFeePanel() }
         addButton(page, "Dashboard पुन्हा अपडेट करा") { showAdminDashboard() }
         addButton(page, "Logout") {
@@ -2329,6 +2332,88 @@ class MainActivity : AppCompatActivity() {
                 android.view.ViewGroup.LayoutParams.WRAP_CONTENT
             ))
         })
+    }
+
+    private fun showCloudBillingRecords() {
+        if (firebaseAuth.currentUser?.email != authorizedAdminEmail) {
+            firebaseAuth.signOut()
+            showMessage("Admin प्रवेश नाकारला.")
+            showHome()
+            return
+        }
+        cloudBillsListener?.remove()
+        val page = createLayout()
+        addTitle(page, "Cloud बिल रेकॉर्ड")
+        val status = TextView(this).apply {
+            text = "Firebase मधून बिल डेटा घेत आहोत..."
+            textSize = 14f
+            setTextColor(Color.DKGRAY)
+            setPadding(4, 8, 4, 12)
+        }
+        page.addView(status)
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val scroll = ScrollView(this)
+        scroll.addView(list)
+        page.addView(scroll, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+        ))
+        addButton(page, "Admin Dashboard") {
+            cloudBillsListener?.remove()
+            cloudBillsListener = null
+            showAdminDashboard()
+        }
+        setContentView(page)
+
+        cloudBillsListener = BillingRepository.listenToBills(
+            onChanged = { bills ->
+                runOnUiThread {
+                    list.removeAllViews()
+                    status.text = "Cloud मध्ये एकूण बिले: ${bills.size} • Live Sync सुरू"
+                    if (bills.isEmpty()) {
+                        list.addView(TextView(this).apply {
+                            text = "अजून Cloud बिल उपलब्ध नाही."
+                            textSize = 16f
+                            setPadding(8, 20, 8, 20)
+                        })
+                    }
+                    bills.sortedByDescending { (it["createdAt"] as? Number)?.toLong() ?: 0L }
+                        .forEach { bill ->
+                            val card = LinearLayout(this).apply {
+                                orientation = LinearLayout.VERTICAL
+                                setPadding(12, 10, 12, 10)
+                                setBackgroundColor(Color.rgb(240, 245, 250))
+                            }
+                            val amount = (bill["amount"] as? Number)?.toDouble() ?: 0.0
+                            card.addView(TextView(this).apply {
+                                text = "${bill["billNumber"] ?: ""}  •  ₹" +
+                                    String.format(Locale.US, "%.2f", amount)
+                                textSize = 17f
+                                setTextColor(Color.rgb(20, 80, 160))
+                            })
+                            card.addView(TextView(this).apply {
+                                text = "${bill["customerName"] ?: ""}  •  ${bill["phone"] ?: ""}\n" +
+                                    "${bill["service"] ?: ""}\n${bill["date"] ?: ""}  •  ${bill["paymentStatus"] ?: ""}"
+                                textSize = 14f
+                                setTextColor(Color.DKGRAY)
+                                setPadding(0, 5, 0, 0)
+                            })
+                            list.addView(card, LinearLayout.LayoutParams(
+                                LinearLayout.LayoutParams.MATCH_PARENT,
+                                LinearLayout.LayoutParams.WRAP_CONTENT
+                            ).apply { setMargins(0, 5, 0, 8) })
+                        }
+                }
+            },
+            onError = { error ->
+                runOnUiThread { status.text = "Cloud Sync त्रुटी: $error" }
+            }
+        )
+    }
+
+    override fun onDestroy() {
+        cloudBillsListener?.remove()
+        cloudBillsListener = null
+        super.onDestroy()
     }
 
     private fun showAdminFeePanel() {
