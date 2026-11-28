@@ -2231,6 +2231,8 @@ class MainActivity : AppCompatActivity() {
 
 
     private fun showAdminDashboard() {
+        cloudBillsListener?.remove()
+        cloudBillsListener = null
         if (firebaseAuth.currentUser?.email != authorizedAdminEmail) {
             firebaseAuth.signOut()
             showMessage("Admin प्रवेश नाकारला.")
